@@ -5,7 +5,7 @@ import socks
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from agents.group import GroupAgent
+from agents.group_agent import GroupAgent
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO

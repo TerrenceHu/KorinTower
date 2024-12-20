@@ -11,6 +11,7 @@ from telethon.tl.types import User, Channel
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 from telethon import utils
 
+from models.group_model import GroupModel
 from utils.teachers import *
 
 # get_input_entity
@@ -21,6 +22,7 @@ class GroupAgent():
         self.client = client
         #me = self.client.get_me()
 
+        
         self.my_users = {}
         self.my_groups = {}
         self.my_channels = {}
@@ -139,6 +141,8 @@ class GroupAgent():
                 if filter_ad_user(member.first_name) or filter_ad_user(member.last_name):
                     continue
                 full_member = self.client(GetFullUserRequest(member))
+                print(member)
+                print(full_member.full_user)
                 self.my_users[member.id] = full_member.full_user.about
                 channel_usernames = find_channel(full_member.full_user.about)
                 if len(channel_usernames) < 1:

@@ -12,6 +12,8 @@ from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyPart
 from telethon import utils
 
 from models.group_model import GroupModel
+from models.user_model import UserModel
+
 from utils.teachers import *
 
 # get_input_entity
@@ -23,7 +25,11 @@ class GroupAgent():
         #me = self.client.get_me()
 
         
-        self.my_users = {}
+        self.group_model = GroupModel(host=self.db_host, user=self.db_user,
+                                        password=self.db_password, database=self.db_database)
+        self.user_model = UserModel(host=self.db_host, user=self.db_user,
+                                        password=self.db_password, database=self.db_database)
+
         self.my_groups = {}
         self.my_channels = {}
         for dialog in client.get_dialogs():
@@ -31,10 +37,10 @@ class GroupAgent():
                 continue
             elif dialog.is_group:
                 self.my_groups[dialog.entity.id] = dialog.name
-                print(f"groups joined: {dialog.entity.id},{dialog.name}")
+                #print(f"groups joined: {dialog.entity.id},{dialog.name}")
             elif dialog.is_channel:
                 self.my_channels[dialog.entity.id] = dialog.name
-                print(f"channels joined: {dialog.entity.id},{dialog.name}")
+                #print(f"channels joined: {dialog.entity.id},{dialog.name}")
         
         self.not_teacher_channels = {}
 
@@ -105,8 +111,8 @@ class GroupAgent():
                 try:
                     self.client(JoinChannelRequest(channel))
                     # 加入后判断是否是老师的Channel，不是就退出
-                    is_teacher = self.parse_channle_messages(channel)
-                    if is_teacher:
+                    #is_teacher = self.parse_channle_messages(channel)
+                    if False:
                         self.my_channels[channel.id] = channel.title
                         # TODO:写入文件或者数据库
                         print(f"Joined channel {channel.title}")
@@ -124,37 +130,33 @@ class GroupAgent():
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
         for id, name in self.my_groups.items():
+            today_date = date.today()
+
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
             members = self.client.iter_participants(id, aggressive=True)
-
-            # TODO:写入文件或者数据库
-            yesterday_date = date.today() - timedelta(days=1)
-            f = open("data/members.%s.%s" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(["first_name", "username", "id", "about", "others"])
-
             for member in members:
-                if member.id in self.my_users:
-                    continue
+                # 过滤bot、广告用户、已经爬过的用户，减少TG请求
+                # TODO: 可能用户信息会更新，需要重新爬取
                 if member.bot:
                     continue
                 if filter_ad_user(member.first_name) or filter_ad_user(member.last_name):
                     continue
+                if self.user_model.dose_user_exist(member.id):
+                    continue
+                
                 full_member = self.client(GetFullUserRequest(member))
-                print(member)
-                print(full_member.full_user)
-                self.my_users[member.id] = full_member.full_user.about
+                about = full_member.full_user.about
+                if about:
+                    about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+
+                self.user_model.add_user(member.id, member.username, member.first_name,
+                                            member.last_name, member.bot, about)
+                self.group_model.add_user_to_group(id, member.id, today_date)
+
                 channel_usernames = find_channel(full_member.full_user.about)
                 if len(channel_usernames) < 1:
                     continue
                 self.join_channels(channel_usernames)
-                            
-                csv_writer.writerow([str(full_member.users[0].first_name),
-                                    str(full_member.users[0].username),
-                                    str(full_member.full_user.id),
-                                    str(full_member.full_user.about).replace('\r', '').replace('\n', '').replace('\t', ''),
-                                    ":".join(channel_usernames)]
-                                    )
             f.close()
 
     # 获取群组消息，从群组消息中获取group或channel

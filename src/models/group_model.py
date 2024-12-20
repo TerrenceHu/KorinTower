@@ -1,3 +1,5 @@
+from datetime import date
+
 import mysql.connector
 from mysql.connector import Error
 
@@ -37,33 +39,52 @@ class GroupModel:
         except Error as e:
             print(f"Error creating table: {e}")
 
-    def add_group(self, group_id: int, name: str):
+    def add_group(self, id: int, name: str):
         """
         添加一个新的群组记录
-        :param group_id: 群组ID
-        :param name: 群组名称
         """
         insert_query = '''
-        INSERT INTO groups (group_id, name) VALUES (%s, %s);
+        INSERT INTO groups (id, name) VALUES (%s, %s);
         '''
         try:
-            self.cursor.execute(insert_query, (group_id, name))
+            self.cursor.execute(insert_query, (id, name))
             self.connection.commit()
         except Error as e:
             print(f"Error adding group: {e}")
 
-    def add_member_to_group(self, group_id: int, user_id: int):
+
+    def is_user_in_group(self, group_id: int, user_id: int) -> bool:
         """
-        将成员添加到指定的群组中
+        检查用户是否已经是群组成员
         """
-        insert_query = '''
-        INSERT INTO group_members (group_id, user_id) VALUES (%s, %s);
+        query = '''
+        SELECT COUNT(*) FROM group_members WHERE group_id = %s AND user_id = %s;
         '''
         try:
-            self.cursor.execute(insert_query, (group_id, user_id))
+            self.cursor.execute(query, (group_id, user_id))
+            count = self.cursor.fetchone()[0]
+            return count > 0
+        except Error as e:
+            print(f"Error checking if user exists in group: {e}")
+            return False
+
+
+    def add_user_to_group(self, group_id: int, user_id: int, updated_on: date):
+        """
+        将用户添加到群组中
+        """
+        if self.is_user_in_group(group_id, user_id):
+            return
+
+        insert_query = '''
+        INSERT INTO group_members (group_id, user_id, updated_on) VALUES (%s, %s, %s);
+        '''
+        try:
+            self.cursor.execute(insert_query, (group_id, user_id, updated_on))
             self.connection.commit()
-        except MySQLError as e:
-            print(f"Error adding member to group: {e}")
+        except Error as e:
+            print(f"Error adding user to group: {e} {group_id} {user_id}")
+
 
     def get_all_groups(self):
         """
@@ -117,20 +138,22 @@ class GroupModel:
 
 # 示例用法
 if __name__ == "__main__":
-    db_manager = GroupDBManager(host="localhost", database="your_database", user="your_username", password="your_password")
+    db_manager = GroupModel("rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com",
+                                "korin", "Python4x", "kt")
+    db_manager.add_user_to_group(1891648796, 98137104)
 
     # 添加群组
-    db_manager.add_group(123456789, "Example Group")
+    #db_manager.add_group(123456789, "Example Group")
 
     # 获取所有群组
-    groups = db_manager.get_all_groups()
-    print(groups)
+    #groups = db_manager.get_all_groups()
+    #print(groups)
 
     # 更新群组名称
-    db_manager.update_group_name(123456789, "Updated Group Name")
+    #db_manager.update_group_name(123456789, "Updated Group Name")
 
     # 删除群组
-    db_manager.delete_group(123456789)
+    #db_manager.delete_group(123456789)
 
     # 关闭连接
     db_manager.close_connection()

@@ -42,26 +42,21 @@ class GroupAgent():
         for message in messages:
             print(message)
         
-        return False
+        return True
     
-    # 过滤掉一些非老师的群成员
-    def filter_ad_user(self, title: str) -> bool:
-        key_words = [u"赚", u"搞钱", u"日结", u"会所", u"抽奖", u"机器人", u"进群", u"进裙",
-                     u"项目", u"客服", u"代理", u"推广", u"招商", u"平台", u"彩金", u"主营",
-                     u"交易", u"安排", u"全国", u"广告", u"软件", u"接码"]
-        for key_word in key_words:
-            if key_word in str(title):
-                return True
-        return False
     
     def join_channels(self, join_list: list) -> None:
         for username in join_list:
             if username.startswith("+"):
                 username = username[1:]
                 try:
-                    self.client(ImportChatInviteRequest(username))
+                    self.client(ImportChatInviteRequest(username[1:]))
+                except UserAlreadyParticipantError as e:
+                    print(f"You are already a participant of private channel: {username}")
+                except InviteRequestSentError as e:
+                    print(f"Successfully requested to join private channel: {username}")
                 except Exception as e:
-                    print(f"Failed to join {username}: {e} {type(e)}")
+                    print(f"Failed to join private channel {username}: {e} {type(e)}")
                 continue
 
             try:
@@ -74,10 +69,10 @@ class GroupAgent():
             if isinstance(channel, User):
                 print(f"{username} is a User")
                 continue
-            if channel.id in self.my_groups or channel.id in self.my_channels:
-                print(f"Already joined {username}")
-                continue
-            if self.filter_ad_user(channel.title):
+            #if channel.id in self.my_groups or channel.id in self.my_channels:
+            #    print(f"Already joined {username}")
+            #    continue
+            if filter_ad_user(channel.title):
                 print(f"{username} is a ad User")
                 continue
 
@@ -90,10 +85,10 @@ class GroupAgent():
                     self.client(JoinChannelRequest(channel))
                     self.my_groups[channel.id] = channel.title
                     print(f"Joined group {channel.title}")
-                except InviteRequestSentError as e:
-                    print(f"Successfully requested to join group: {username}")
                 except UserAlreadyParticipantError as e:
                     print(f"You are already a participant of group: {username}")
+                except InviteRequestSentError as e:
+                    print(f"Successfully requested to join group: {username}")
                 except Exception as e:
                     print(f"Failed to join group {username}: {e} {type(e)}")
                     print(channel)
@@ -108,8 +103,8 @@ class GroupAgent():
                 try:
                     self.client(JoinChannelRequest(channel))
                     # 加入后判断是否是老师的Channel，不是就退出
-                    # is_teacher = self.parse_channle_messages(channel)
-                    if True:
+                    is_teacher = self.parse_channle_messages(channel)
+                    if is_teacher:
                         self.my_channels[channel.id] = channel.title
                         # TODO:写入文件或者数据库
                         print(f"Joined channel {channel.title}")
@@ -141,7 +136,7 @@ class GroupAgent():
                     continue
                 if member.bot:
                     continue
-                if self.filter_ad_user(member.first_name) or self.filter_ad_user(member.last_name):
+                if filter_ad_user(member.first_name) or filter_ad_user(member.last_name):
                     continue
                 full_member = self.client(GetFullUserRequest(member))
                 self.my_users[member.id] = full_member.full_user.about

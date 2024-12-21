@@ -14,7 +14,6 @@ CREATE TABLE kt.users (
 	username VARCHAR(100),
 	first_name VARCHAR(100),
 	last_name VARCHAR(100),
-	is_bot BOOLEAN,
 	about VARCHAR(255)
 )
 ENGINE=InnoDB

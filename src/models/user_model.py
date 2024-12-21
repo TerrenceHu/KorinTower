@@ -20,22 +20,21 @@ class UserModel:
             print(f"Error connecting to MySQL Database: {e}")
 
 
-    def add_user(self, id, username, first_name, last_name, is_bot, about):
+    def add_user(self, id, username, first_name, last_name, about):
         """
         添加一个新的用户记录
         """
         query = """
-        INSERT INTO users (id, username, first_name, last_name, is_bot, about)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO users (id, username, first_name, last_name, about)
+        VALUES (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
         id = VALUES(id),
         username = VALUES(username),
         first_name = VALUES(first_name),
         last_name = VALUES(last_name),
-        is_bot = VALUES(is_bot),
         about = VALUES(about)
         """
-        values = (id, username, first_name, last_name, is_bot, about)
+        values = (id, username, first_name, last_name, about)
         self._execute_query(query, values)
 
     def dose_user_exist(self, id):

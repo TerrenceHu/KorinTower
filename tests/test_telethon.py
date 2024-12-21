@@ -17,28 +17,18 @@ username = "terrencehu"
 client = TelegramClient(username, api_id, api_hash)
 client.start()
 
-username = "3G1uBKXJUYhiMjBl"
-link = "t.me/+3G1uBKXJUYhiMjBl"
-username = "YZM_QZ"
-
-'''
+# channel
+chat_name = "kangmimm"
+# group
+chat_name = "q16816800"
 try:
-    channel = client.get_entity(username)
-    print(channel)
+    chat = client.get_entity(chat_name)
+    print(chat)
 except Exception as e:
-    print(f"Failed to get_entity {username}: {e}")
-'''
+    print(f"Failed to get_entity {chat_name}: {e}")
 
 
 '''
-try:
-    #client(JoinChannelRequest(channel))
-    client(ImportChatInviteRequest(username))
-except Exception as e:
-    print(f"Failed to join {username}: {e} {type(e)}")
-'''
-
-
 username = "kangmimm"
 channel = client.get_entity(username)
 try:
@@ -56,4 +46,5 @@ for message in messages:
     print(message)
     if message.photo:
         path = message.download_media()
-        print('File saved to', path) 
+        print('File saved to', path)
+'''

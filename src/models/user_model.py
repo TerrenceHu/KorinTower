@@ -15,7 +15,6 @@ class UserModel:
             )
             if self.connection.is_connected():
                 self.cursor = self.connection.cursor()
-                print("Connected to MySQL database")
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
 
@@ -37,7 +36,7 @@ class UserModel:
         values = (id, username, first_name, last_name, about)
         self._execute_query(query, values)
 
-    def dose_user_exist(self, id):
+    def check_user_exist(self, id):
         """
         检查用户是否存在于 users 表中
         """

@@ -17,27 +17,8 @@ class GroupModel:
             )
             if self.connection.is_connected():
                 self.cursor = self.connection.cursor()
-                #self._create_table_if_not_exists()
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
-
-    def _create_table_if_not_exists(self):
-        """
-        创建group表，如果不存在的话
-        """
-        create_table_query = '''
-        CREATE TABLE IF NOT EXISTS groups (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            group_id BIGINT UNIQUE NOT NULL,
-            name VARCHAR(255) NOT NULL,
-            joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        '''
-        try:
-            self.cursor.execute(create_table_query)
-            self.connection.commit()
-        except Error as e:
-            print(f"Error creating table: {e}")
 
     def add_group(self, id: int, name: str):
         """
@@ -52,6 +33,14 @@ class GroupModel:
         except Error as e:
             print(f"Error adding group: {e}")
 
+    def check_group_exist(self, id):
+        """
+        检查group是否存在于 groups 表中
+        """
+        query = "SELECT EXISTS(SELECT 1 FROM groups WHERE id = %s LIMIT 1)"
+        values = (id,)
+        result = self._fetch_one(query, values)
+        return result[0]
 
     def is_user_in_group(self, group_id: int, user_id: int) -> bool:
         """
@@ -135,6 +124,7 @@ class GroupModel:
         if self.connection.is_connected():
             self.cursor.close()
             self.connection.close()
+
 
 # 示例用法
 if __name__ == "__main__":

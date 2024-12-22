@@ -11,7 +11,10 @@ from telethon.tl.types import User, Channel
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 from telethon import utils
 
+from agents.channel_agent import ChannelAgent
+
 from models.group_model import GroupModel
+from models.channel_model import ChannelModel
 from models.user_model import UserModel
 
 from utils.teachers import *
@@ -23,8 +26,9 @@ class GroupAgent():
     def __init__(self, client: TelegramClient) -> None:
         self.client = client
 
+        # 获取当前对话中的群组和频道
         self.chat_groups = {}
-        self.my_channels = {}
+        self.chat_channels = {}
         for dialog in client.get_dialogs():
             if dialog.is_user:
                 continue
@@ -32,19 +36,25 @@ class GroupAgent():
                 self.chat_groups[dialog.entity.id] = dialog.name
                 #print(f"groups joined: {dialog.entity.id},{dialog.name}")
             elif dialog.is_channel:
-                self.my_channels[dialog.entity.id] = dialog.name
+                self.chat_channels[dialog.entity.id] = dialog.name
                 #print(f"channels joined: {dialog.entity.id},{dialog.name}")
         
+        # 群组、频道和用户的数据库模型
         self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
         self.db_user = "korin"
         self.db_password = "Python4x"
         self.db_database = "kt"
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,
                                         password=self.db_password, database=self.db_database)
+        self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
+                                        password=self.db_password, database=self.db_database)
         self.user_model = UserModel(host=self.db_host, user=self.db_user,
                                         password=self.db_password, database=self.db_database)
 
-        self.not_teacher_channels = {}
+        # 记录已经抓取过的names，减少重复请求
+        self.chat_names = {}
+
+        self.channel_agent = ChannelAgent(client)
     
 
     # 获取群组成员，从群组成员的about中获取group或channel
@@ -60,22 +70,26 @@ class GroupAgent():
                     continue
                 if filter_ad_user_by_name(member.first_name) or filter_ad_user_by_name(member.last_name):
                     continue
-                if self.user_model.dose_user_exist(member.id):
-                    continue
                 if member.first_name == "" and member.last_name == "" and member.username == "":
                     continue
+                if self.user_model.check_user_exist(member.id):
+                    continue
                 
+                # 获取用户的info
                 full_member = self.client(GetFullUserRequest(member))
                 about = full_member.full_user.about
                 if about:
                     about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-                if filter_ad_user_by_info(about):
-                    continue
 
                 self.user_model.add_user(member.id, member.username, 
                                             member.first_name, member.last_name, about)
                 self.group_model.add_user_to_group(id, member.id, today_date)
 
+                # 根据info再次过滤广告号，广告号没有价值且处理麻烦
+                if filter_ad_user_by_info(about):
+                    continue
+                    
+                # 从info中获取新的群组或频道
                 chat_names = find_channel(full_member.full_user.about)
                 if len(chat_names) < 1:
                     continue
@@ -120,7 +134,7 @@ class GroupAgent():
             print(f"Failed to join private channel {chat_name}: {e} {type(e)}")
 
     # 加入 group
-    def join_group(self, chat) -> bool:
+    def join_group(self, chat: Channel) -> bool:
         try:
             self.client(JoinChannelRequest(chat))
             self.chat_groups[chat.id] = chat.title
@@ -139,26 +153,26 @@ class GroupAgent():
     def join_channel(self, chat: Channel) -> bool:
         try:
             self.client(JoinChannelRequest(chat))
-            # 加入后判断是否是老师的Channel，不是就退出
-            #is_teacher = self.parse_channle_messages(channel)
-            if False:
-                self.my_channels[channel.id] = channel.title
-                # TODO:写入文件或者数据库
-                print(f"Joined channel {channel.title}")
-            else:
-                self.not_teacher_channels[channel.id] = channel.title
+            print(f"Joined channel {chat.title}")
             return True
-        except InviteRequestSentError as e:
-            print(f"Successfully requested to join channel: {username}")
         except UserAlreadyParticipantError as e:
-            print(f"You are already a participant of channel: {username}")
+            print(f"You are already a participant of channel: {chat.title}")
+        except InviteRequestSentError as e:
+            print(f"Successfully requested to join channel: {chat.title}")
         except Exception as e:
-            print(f"Failed to join channel {username}: {e} {type(e)}")
+            print(f"Failed to join channel {chat.title}: {e} {type(e)}")
         return False
-    
+
 
     def process_chat_names(self, chat_names: list) -> None:
         for chat_name in chat_names:
+            if chat_name in self.chat_names:
+                print(f"Already checked chat: {chat_name}")
+                continue
+            else:
+                self.chat_names[chat_name] = 1
+
+            # TODO: 加入 private chat 怎么处理？
             if chat_name.startswith("+"):
                 self.join_private_chat(chat_name)
                 continue
@@ -177,33 +191,24 @@ class GroupAgent():
             if filter_ad_user_by_name(chat.title):
                 print(f"{chat_name} is a ad User")
                 continue
-            # 过滤已经加入的Channel/Group
-            #if chat.id in self.chat_groups or chat.id in self.my_channels:
-            #    print(f"Already joined {chat_name}")
-            #    continue
             
             # 如果是Group
             if chat.megagroup == True:
-                # 过滤条件：成员少于100
+                # 过滤成员少于100、已经加入的Group
                 if chat.participants_count != None and chat.participants_count < 100:
                     print(f"Too few members in group: {chat_name}")
+                    continue
+                if self.group_model.check_group_exist(chat.id):
+                    print(f"Already checked group: {chat_name}")
                     continue
                 self.join_group(chat)
             # 如果是Channel
             else:
-                # 过滤条件：成员少于50
-                if chat.participants_count != None and chat.participants_count < 50:
-                    print(f"Too few members in channel: {chat_name}")
+                # 过滤已经加入的Channel
+                if self.channel_model.check_channel_exist(chat.id):
+                    print(f"Already checked channel: {chat_name}")
                     continue
-                # 如果之前检测过不是老师，就过滤
-                if chat.id in self.not_teacher_channels:
-                    continue
-
-
-    # 解析Channel消息
-    def parse_channle_messages(self, channel: Channel) -> bool:
-        messages = self.client.iter_messages(channel.id)
-        for message in messages:
-            print(message)
-        
-        return True
+                is_teacher = False
+                if self.join_channel(chat):
+                    self.channel_model.add_channel(chat.id, chat.title, chat.username, is_teacher)
+                    self.channel_agent.parse_channel(chat)

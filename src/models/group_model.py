@@ -15,8 +15,7 @@ class GroupModel:
                 password=password,
                 database=database,
             )
-            if self.connection.is_connected():
-                self.cursor = self.connection.cursor()
+            self.cursor = self.connection.cursor()
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
 
@@ -24,20 +23,18 @@ class GroupModel:
         """
         添加一个新的群组记录
         """
-        insert_query = '''
-        INSERT INTO groups (id, name) VALUES (%s, %s);
+        query = '''
+        INSERT INTO `groups` (id, name) VALUES (%s, %s);
         '''
-        try:
-            self.cursor.execute(insert_query, (id, name))
-            self.connection.commit()
-        except Error as e:
+        values = (id, name)
+        if not self._execute_query(query, values):
             print(f"Error adding group: {e}")
 
-    def check_group_exist(self, id):
+    def check_group_exists(self, id):
         """
         检查group是否存在于 groups 表中
         """
-        query = "SELECT EXISTS(SELECT 1 FROM groups WHERE id = %s LIMIT 1)"
+        query = "SELECT EXISTS(SELECT 1 FROM `groups` WHERE id = %s LIMIT 1)"
         values = (id,)
         result = self._fetch_one(query, values)
         return result[0]
@@ -85,7 +82,7 @@ class GroupModel:
             self.cursor.execute(select_query)
             return self.cursor.fetchall()
         except Error as e:
-            print(f"Error retrieving groups: {e}")
+            print(f"Error retrieving `groups`: {e}")
             return []
 
     def update_group_name(self, group_id: int, new_name: str):
@@ -95,7 +92,7 @@ class GroupModel:
         :param new_name: 新的群组名称
         """
         update_query = '''
-        UPDATE groups SET name = %s WHERE group_id = %s;
+        UPDATE `groups` SET name = %s WHERE group_id = %s;
         '''
         try:
             self.cursor.execute(update_query, (new_name, group_id))
@@ -109,7 +106,7 @@ class GroupModel:
         :param group_id: 要删除的群组ID
         """
         delete_query = '''
-        DELETE FROM groups WHERE group_id = %s;
+        DELETE FROM `groups` WHERE group_id = %s;
         '''
         try:
             self.cursor.execute(delete_query, (group_id,))
@@ -124,6 +121,30 @@ class GroupModel:
         if self.connection.is_connected():
             self.cursor.close()
             self.connection.close()
+
+    def _execute_query(self, query, values) -> bool:
+        """
+        Execute a query with optional parameters.
+        """
+        try:
+            self.cursor.execute(query, values)
+            self.connection.commit()
+            return True
+        except Error as e:
+            print(f"Error executing query: {e}")
+            return False
+
+    def _fetch_one(self, query, values):
+        """
+        Fetch a single row from the database.
+        """
+        try:
+            self.cursor.execute(query, values)
+            result = self.cursor.fetchone()
+            return result
+        except Error as e:
+            print(f"Error fetching data: {e}")
+            return None
 
 
 # 示例用法

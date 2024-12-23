@@ -15,8 +15,7 @@ class ChannelModel:
                 password=password,
                 database=database,
             )
-            if self.connection.is_connected():
-                self.cursor = self.connection.cursor()
+            self.cursor = self.connection.cursor()
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
 
@@ -130,9 +129,8 @@ class ChannelModel:
         Fetch a single row from the database.
         """
         try:
-            cursor = self.connection.cursor()
-            cursor.execute(query, values)
-            result = cursor.fetchone()
+            self.cursor.execute(query, values)
+            result = self.cursor.fetchone()
             return result
         except Error as e:
             print(f"Error fetching data: {e}")

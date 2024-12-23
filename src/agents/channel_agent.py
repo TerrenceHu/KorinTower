@@ -29,18 +29,20 @@ class ChannelAgent():
                 content = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
                 #print(str(message.date) + " " + content + " " + str(message.photo if message.photo else "None"))
                 print(content)
-                f = open("data/%s.%s.messages" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(["date", "sender", "message"])
 
-            for message in messages:
-                if message.date <= yesterday:
-                    break
-                csv_writer.writerow([str(message.date),
-                                    str(utils.get_display_name(message.sender)),
-                                    str(message.message).replace('\r', '').replace('\n', '').replace('\t', '')]
-                                    )
+    # 解析Channel消息
+    def get_channel_messages(self, channel: Channel) -> bool:
+        f = open("data/channel_messages.csv", 'a', encoding='utf-8-sig')
+        csv_writer = csv.writer(f, delimiter='\t')
+
+        content = []
+        messages = self.client.iter_messages(channel.id)
+        for message in messages:
+            message_text = message.message
+            if message_text:
+                content.append(message_text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' '))
+        else:
+            csv_writer.writerow([str(channel.username), str(channel.title), ";" . join(content), "0"])
             f.close()
-
 
         return True

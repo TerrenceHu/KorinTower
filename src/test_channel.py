@@ -1,10 +1,36 @@
 from telethon.sync import TelegramClient
 
+import mysql.connector
+from mysql.connector import Error
+
 from agents.channel_agent import ChannelAgent
 from models.channel_model import ChannelModel
+from models.group_model import GroupModel
+
 
 
 def main() -> None:
+    db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
+    db_user = "korin"
+    db_password = "Python4x"
+    db_database = "kt"
+    group_model = GroupModel(host=db_host, user=db_user,
+                                    password=db_password, database=db_database)
+    id = 2010840625
+    query = "SELECT EXISTS(SELECT 1 FROM `groups` WHERE id = %s LIMIT 1)"
+    values = (id,)
+    connection = mysql.connector.connect(
+                host=db_host,
+                user=db_user,
+                password=db_password,
+                database=db_database,
+            )
+    cursor = connection.cursor()
+    cursor.execute(query, values)
+    result = cursor.fetchone()
+    print(result)
+
+    '''
     api_id = 25452895
     api_hash = "9054a96cc2c5fe1bff6c2aa2c8a85a95"
 
@@ -33,7 +59,7 @@ def main() -> None:
     
     channel_agent = ChannelAgent(client)
     channel_agent.parse_channel(chat)
-
+    '''
 
 
 

@@ -14,7 +14,7 @@ from telethon import utils
 from models.group_model import GroupModel
 from models.user_model import UserModel
 
-from utils.teachers import *
+from utils.chats import *
 
 
 class ChannelAgent():

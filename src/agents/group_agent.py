@@ -27,10 +27,7 @@ class GroupAgent():
         self.client = client
         
         # 群组、频道和用户的数据库模型
-        self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
-        self.db_user = "korin"
-        self.db_password = "Python4x"
-        self.db_database = "kt"
+
         self.user_model = UserModel(host=self.db_host, user=self.db_user,
                                     password=self.db_password, database=self.db_database)
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,

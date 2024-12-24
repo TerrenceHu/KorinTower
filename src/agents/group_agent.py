@@ -27,7 +27,10 @@ class GroupAgent():
         self.client = client
         
         # 群组、频道和用户的数据库模型
-        
+        self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
+        self.db_user = "korin"
+        self.db_password = "Python4x"
+        self.db_database = "kt"
         self.user_model = UserModel(host=self.db_host, user=self.db_user,
                                     password=self.db_password, database=self.db_database)
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,
@@ -41,14 +44,16 @@ class GroupAgent():
         self.chat_names = {}
 
         # 获取当前对话中的群组和频道
-        self.chat_groups = {}
         self.chat_channels = {}
         for dialog in client.get_dialogs():
             if dialog.is_user:
                 continue
             elif dialog.is_group:
-                self.chat_groups[dialog.entity.id] = dialog.name
-                #print(f"groups joined: {dialog.entity.id},{dialog.name}")
+                if not self.group_model.does_group_exist(dialog.entity.id):
+                    if filter_ad_entity_by_name(dialog.entity.title):
+                        print(f"Filter ad group {dialog.entity.title}")
+                    else:
+                        self.group_model.add_group(dialog.entity.id, dialog.entity.username)
             elif dialog.is_channel:
                 self.chat_channels[dialog.entity.id] = dialog.name
                 #self.process_channel(dialog.entity)
@@ -57,7 +62,7 @@ class GroupAgent():
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
         today_date = date.today()
-        for id, name in self.chat_groups.items():
+        for id, name in self.group_model.get_all_groups():
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
             members = self.client.iter_participants(id, aggressive=True)
             for member in members:
@@ -65,11 +70,12 @@ class GroupAgent():
                 # TODO: 可能用户信息会更新，需要重新爬取
                 if member.bot:
                     continue
-                if filter_ad_user_by_name(member.first_name) or filter_ad_user_by_name(member.last_name):
+                if filter_ad_entity_by_name(member.first_name) or filter_ad_entity_by_name(member.last_name):
                     continue
                 if member.first_name == "" and member.last_name == "" and member.username == "":
                     continue
-                if self.user_model.check_user_exist(member.id):
+                print(member.id)
+                if self.user_model.does_user_exist(member.id):
                     continue
                 
                 # 获取用户的info
@@ -78,12 +84,12 @@ class GroupAgent():
                 if about:
                     about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
 
-                self.user_model.add_user(member.id, member.username, 
+                self.user_model.add_user(member.id, member.username,
                                             member.first_name, member.last_name, about)
                 self.group_model.add_user_to_group(id, member.id, today_date)
 
                 # 根据info再次过滤广告号，广告号没有价值且处理麻烦
-                if filter_ad_user_by_info(about):
+                if filter_ad_entity_by_info(about):
                     continue
                     
                 # 从info中获取新的群组或频道
@@ -95,7 +101,7 @@ class GroupAgent():
     # 获取群组消息，从群组消息中获取group或channel
     def get_group_messages(self) -> None:
         today_date = date.today()
-        for id, name in self.chat_groups.items():
+        for id, name in self.group_model.get_all_groups():
             today = datetime(today_date.year, today_date.month, today_date.day, tzinfo=pytz.utc)
             yesterday_date = date.today() - timedelta(days=1)
             yesterday = datetime(yesterday_date.year, yesterday_date.month, yesterday_date.day, tzinfo=pytz.utc)
@@ -134,11 +140,12 @@ class GroupAgent():
     def join_group(self, chat: Channel) -> bool:
         try:
             self.client(JoinChannelRequest(chat))
-            self.chat_groups[chat.id] = chat.title
+            self.group_model.add_group(chat.id, chat.username)
             print(f"Joined group {chat.title}")
             return True
         except UserAlreadyParticipantError as e:
             print(f"You have already joined group: {chat.title}")
+            return True
         except InviteRequestSentError as e:
             print(f"Successfully requested to join group: {chat.title}")
         except Exception as e:
@@ -196,7 +203,7 @@ class GroupAgent():
             if isinstance(chat, User):
                 print(f"{chat_name} is a User")
                 continue
-            if filter_ad_user_by_name(chat.title):
+            if filter_ad_entity_by_name(chat.title):
                 print(f"{chat_name} is a ad User")
                 continue
             
@@ -206,7 +213,10 @@ class GroupAgent():
                 if chat.participants_count != None and chat.participants_count < 100:
                     print(f"Too few members in group: {chat_name}")
                     continue
-                if self.group_model.check_group_exists(chat.id):
+                if filter_ad_entity_by_name(chat.title):
+                    print(f"Filter ad group {chat_name} {chat.title}")
+                    continue
+                if self.group_model.does_group_exists(chat.id):
                     print(f"Already checked group: {chat_name}")
                     continue
                 self.join_group(chat)

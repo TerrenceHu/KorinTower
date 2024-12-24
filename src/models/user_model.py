@@ -35,7 +35,7 @@ class UserModel:
         values = (id, username, first_name, last_name, about)
         self._execute_query(query, values)
 
-    def check_user_exist(self, id):
+    def does_user_exist(self, id):
         """
         检查用户是否存在于 users 表中
         """
@@ -85,15 +85,6 @@ class UserModel:
         values = (user_id,)
         self._execute_query(query, values)
 
-
-    def close_connection(self):
-        """
-        关闭数据库连接
-        """
-        if self.connection.is_connected():
-            self.cursor.close()
-            self.connection.close()
-
     def _execute_query(self, query, values):
         """
         Execute a query with optional parameters.
@@ -115,6 +106,14 @@ class UserModel:
         except Error as e:
             print(f"Error fetching data: {e}")
             return None
+
+    def close_connection(self):
+        """
+        关闭数据库连接
+        """
+        if self.connection.is_connected():
+            self.cursor.close()
+            self.connection.close()
 
 
 # 示例用法

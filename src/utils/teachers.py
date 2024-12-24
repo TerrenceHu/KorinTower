@@ -8,7 +8,7 @@ def find_channel(about):
 
 
 # 过滤掉一些非老师的群成员
-def filter_ad_user_by_name(name: str) -> bool:    
+def filter_ad_entity_by_name(name: str) -> bool:    
     key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", 
                  u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
                  u"全国", u"广告", u"软件", u"接码", u"老店", u"公群",
@@ -19,7 +19,7 @@ def filter_ad_user_by_name(name: str) -> bool:
     return False
 
 # 过滤掉一些非老师的群成员
-def filter_ad_user_by_info(info: str) -> bool:
+def filter_ad_entity_by_info(info: str) -> bool:
     key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", 
                  u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
                  u"全国", u"广告", u"软件", u"接码", u"老店", u"公群"]

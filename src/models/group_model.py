@@ -19,18 +19,18 @@ class GroupModel:
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
 
-    def add_group(self, id: int, name: str):
+    def add_group(self, id: int, username: str):
         """
         添加一个新的群组记录
         """
         query = '''
-        INSERT INTO `groups` (id, name) VALUES (%s, %s);
+        INSERT INTO `groups` (id, username) VALUES (%s, %s);
         '''
-        values = (id, name)
+        values = (id, username)
         if not self._execute_query(query, values):
-            print(f"Error adding group: {e}")
+            print(f"Error adding group: {id}")
 
-    def check_group_exists(self, id):
+    def does_group_exist(self, id):
         """
         检查group是否存在于 groups 表中
         """
@@ -38,22 +38,18 @@ class GroupModel:
         values = (id,)
         result = self._fetch_one(query, values)
         return result[0]
-
-    def is_user_in_group(self, group_id: int, user_id: int) -> bool:
+    
+    def get_all_groups(self):
         """
-        检查用户是否已经是群组成员
+        获取所有群组记录
         """
-        query = '''
-        SELECT COUNT(*) FROM group_members WHERE group_id = %s AND user_id = %s;
-        '''
+        select_query = 'SELECT * FROM `groups`;'
         try:
-            self.cursor.execute(query, (group_id, user_id))
-            count = self.cursor.fetchone()[0]
-            return count > 0
+            self.cursor.execute(select_query)
+            return self.cursor.fetchall()
         except Error as e:
-            print(f"Error checking if user exists in group: {e}")
-            return False
-
+            print(f"Error retrieving groups: {e}")
+            return []
 
     def add_user_to_group(self, group_id: int, user_id: int, updated_on: date):
         """
@@ -71,34 +67,20 @@ class GroupModel:
         except Error as e:
             print(f"Error adding user to group: {e} {group_id} {user_id}")
 
-
-    def get_all_groups(self):
+    def is_user_in_group(self, group_id: int, user_id: int) -> bool:
         """
-        获取所有群组记录
-        :return: 所有群组的列表
+        检查用户是否已经是群组成员
         """
-        select_query = 'SELECT * FROM groups;'
-        try:
-            self.cursor.execute(select_query)
-            return self.cursor.fetchall()
-        except Error as e:
-            print(f"Error retrieving `groups`: {e}")
-            return []
-
-    def update_group_name(self, group_id: int, new_name: str):
-        """
-        更新指定群组的名称
-        :param group_id: 要更新的群组ID
-        :param new_name: 新的群组名称
-        """
-        update_query = '''
-        UPDATE `groups` SET name = %s WHERE group_id = %s;
+        query = '''
+        SELECT COUNT(*) FROM group_members WHERE group_id = %s AND user_id = %s;
         '''
         try:
-            self.cursor.execute(update_query, (new_name, group_id))
-            self.connection.commit()
+            self.cursor.execute(query, (group_id, user_id))
+            count = self.cursor.fetchone()[0]
+            return count > 0
         except Error as e:
-            print(f"Error updating group name: {e}")
+            print(f"Error checking if user exists in group: {e}")
+            return False
 
     def delete_group(self, group_id: int):
         """
@@ -113,14 +95,6 @@ class GroupModel:
             self.connection.commit()
         except Error as e:
             print(f"Error deleting group: {e}")
-
-    def close_connection(self):
-        """
-        关闭数据库连接
-        """
-        if self.connection.is_connected():
-            self.cursor.close()
-            self.connection.close()
 
     def _execute_query(self, query, values) -> bool:
         """
@@ -146,25 +120,10 @@ class GroupModel:
             print(f"Error fetching data: {e}")
             return None
 
-
-# 示例用法
-if __name__ == "__main__":
-    db_manager = GroupModel("rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com",
-                                "korin", "Python4x", "kt")
-    db_manager.add_user_to_group(1891648796, 98137104)
-
-    # 添加群组
-    #db_manager.add_group(123456789, "Example Group")
-
-    # 获取所有群组
-    #groups = db_manager.get_all_groups()
-    #print(groups)
-
-    # 更新群组名称
-    #db_manager.update_group_name(123456789, "Updated Group Name")
-
-    # 删除群组
-    #db_manager.delete_group(123456789)
-
-    # 关闭连接
-    db_manager.close_connection()
+    def close_connection(self):
+        """
+        关闭数据库连接
+        """
+        if self.connection.is_connected():
+            self.cursor.close()
+            self.connection.close()

@@ -38,7 +38,7 @@ class GroupModel:
         values = (id,)
         result = self._fetch_one(query, values)
         return result[0]
-    
+
     def get_all_groups(self):
         """
         获取所有群组记录
@@ -82,16 +82,15 @@ class GroupModel:
             print(f"Error checking if user exists in group: {e}")
             return False
 
-    def delete_group(self, group_id: int):
+    def delete_group(self, id: int):
         """
         删除指定群组记录
-        :param group_id: 要删除的群组ID
         """
         delete_query = '''
-        DELETE FROM `groups` WHERE group_id = %s;
+        DELETE FROM `groups` WHERE id = %s;
         '''
         try:
-            self.cursor.execute(delete_query, (group_id,))
+            self.cursor.execute(delete_query, (id,))
             self.connection.commit()
         except Error as e:
             print(f"Error deleting group: {e}")

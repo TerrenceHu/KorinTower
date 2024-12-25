@@ -22,7 +22,7 @@ class UserModel:
         """
         添加一个新的用户记录
         """
-        query = """
+        query = '''
         INSERT INTO users (id, username, first_name, last_name, about)
         VALUES (%s, %s, %s, %s, %s)
         ON DUPLICATE KEY UPDATE
@@ -31,9 +31,10 @@ class UserModel:
         first_name = VALUES(first_name),
         last_name = VALUES(last_name),
         about = VALUES(about)
-        """
+        '''
         values = (id, username, first_name, last_name, about)
-        self._execute_query(query, values)
+        if not self._execute_query(query, values)
+            print(f"Error adding user: {id}")
 
     def does_user_exist(self, id):
         """
@@ -43,6 +44,18 @@ class UserModel:
         values = (id,)
         result = self._fetch_one(query, values)
         return result[0]
+
+    def get_all_users(self):
+        """
+        获取所有用户记录
+        """
+        select_query = 'SELECT * FROM users;'
+        try:
+            self.cursor.execute(select_query)
+            return self.cursor.fetchall()
+        except Error as e:
+            print(f"Error retrieving users: {e}")
+            return []
 
     def get_user_by_id(self, id):
         """Retrieve a user by their ID."""
@@ -85,15 +98,17 @@ class UserModel:
         values = (user_id,)
         self._execute_query(query, values)
 
-    def _execute_query(self, query, values):
+    def _execute_query(self, query, values) -> bool:
         """
         Execute a query with optional parameters.
         """
         try:
             self.cursor.execute(query, values)
             self.connection.commit()
+            return True
         except Error as e:
             print(f"Error executing query: {e}")
+            return False
 
     def _fetch_one(self, query, values):
         """
@@ -114,33 +129,3 @@ class UserModel:
         if self.connection.is_connected():
             self.cursor.close()
             self.connection.close()
-
-
-# 示例用法
-if __name__ == "__main__":
-    db_manager = UserModel(
-        host="rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com",
-        user="korin",
-        password="Python4x",
-        database="kt"
-    )
-
-    # 创建用户
-    db_manager.create_user(1, "John", "Doe", "johndoe", "Software Developer")
-
-    # 查询用户
-    user = db_manager.get_user_by_id(1)
-    print(user)
-
-    # 更新用户
-    db_manager.update_user(1, last_name="Smith")
-
-    # 再次查询用户
-    updated_user = db_manager.get_user_by_id(1)
-    print(updated_user)
-
-    # 删除用户
-    db_manager.delete_user(1)
-
-    # 断开连接
-    db_manager.close_connection()

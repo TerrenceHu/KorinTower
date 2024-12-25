@@ -1,5 +1,5 @@
 import json
-import csv
+import logging
 import pytz
 from datetime import date, datetime, timedelta
 
@@ -19,15 +19,19 @@ from models.user_model import UserModel
 
 from utils.chats import *
 
-# get_input_entity
-# FloodWaitError
+logger = logging.getLogger(__name__)
+
+# get_input_entity, FloodWaitError
 
 class GroupAgent():
     def __init__(self, client: TelegramClient) -> None:
         self.client = client
         
         # 群组、频道和用户的数据库模型
-
+        self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
+        self.db_user = "korin"
+        self.db_password = "Python4x"
+        self.db_database = "kt"
         self.user_model = UserModel(host=self.db_host, user=self.db_user,
                                     password=self.db_password, database=self.db_database)
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,
@@ -35,27 +39,31 @@ class GroupAgent():
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
         
+        self.channel_agent = ChannelAgent(client)
+
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         self.chat_channels = {}
         for dialog in client.get_dialogs():
+            logger.info(f"Get dialog: {dialog.name}")
             if dialog.is_user:
+                logger.info(f"Ignore dialog as user: {dialog.name}")
                 continue
             elif dialog.is_group:
                 # TODO：对广告群组，要退出
-                if filter_ad_entity_by_name(dialog.entity.title):
-                    print(f"Filter ad group {dialog.entity.title}")
+                if filter_group_by_title(dialog.entity.title):
+                    logger.info(f"Filter dialog as ad group: {dialog.name},{dialog.entity.username}")
                     continue
                 if not self.group_model.does_group_exist(dialog.entity.id):
                     self.group_model.add_group(dialog.entity.id, dialog.entity.username)
+                    logger.info(f"Add new group to db: {dialog.name},{dialog.entity.username}")
             elif dialog.is_channel:
                 self.chat_channels[dialog.entity.id] = dialog.name
+                logger.info(f"Add new channel to dict: {dialog.name},{dialog.entity.username}")
                 #self.process_channel(dialog.entity)
-                #print(f"channels joined: {dialog.entity.id},{dialog.name}")
         
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
-
-        self.channel_agent = ChannelAgent(client)
+        
 
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
@@ -68,7 +76,7 @@ class GroupAgent():
                 # TODO: 可能用户信息会更新，需要重新爬取
                 if member.bot:
                     continue
-                if filter_ad_entity_by_name(member.first_name) or filter_ad_entity_by_name(member.last_name):
+                if filter_entity_by_title(member.first_name) or filter_entity_by_title(member.last_name):
                     continue
                 if member.first_name == "" and member.last_name == "" and member.username == "":
                     continue
@@ -79,7 +87,7 @@ class GroupAgent():
                 try:
                     full_member = self.client(GetFullUserRequest(member))
                 except Exception as e:
-                    print(f"Failed to GetFullUserRequest {member.id}: {e}")
+                    logger.error(f"Failed to GetFullUserRequest {member.id},{member.username}: {e}")
                     continue
 
                 about = full_member.full_user.about
@@ -88,10 +96,11 @@ class GroupAgent():
 
                 self.user_model.add_user(member.id, member.username,
                                             member.first_name, member.last_name, about)
+                logger.info(f"Add new user to db: {member.id},{member.username}")
                 self.group_model.add_user_to_group(id, member.id, today_date)
 
                 # 根据info再次过滤广告号，广告号没有价值且处理麻烦
-                if filter_ad_entity_by_info(about):
+                if filter_entity_by_info(about):
                     continue
                     
                 # 从info中获取新的群组或频道
@@ -144,7 +153,6 @@ class GroupAgent():
     def join_group(self, chat: Channel) -> bool:
         try:
             self.client(JoinChannelRequest(chat))
-            self.group_model.add_group(chat.id, chat.username)
             print(f"Joined group {chat.title}")
             return True
         except UserAlreadyParticipantError as e:
@@ -172,24 +180,25 @@ class GroupAgent():
 
     def process_group(self, group: Channel):
         # TODO: 判断是否是老师群，不是则不加入
-        # 过滤成员少于500、已经加入的Group
-        if group.participants_count != None and group.participants_count < 500:
+        # 过滤成员少于1000、已经加入的Group
+        if group.participants_count != None and group.participants_count < 1000:
             print(f"Too few members in group: {group.username}")
-            continue
-        if filter_ad_entity_by_name(group.title):
+            return
+        if filter_group_by_title(group.title):
             print(f"Filter ad group {group.username} {group.title}")
-            continue
+            return
         if self.group_model.does_group_exist(group.id):
             print(f"Already checked group: {group.username}")
-            continue
-        self.join_group(group)
+            return
+        #self.join_group(group)
+        return
 
     def process_channel(self, channel: Channel):
+        logger.info(f"Processing channel: {channel.username},{channel.title}")
         # 过滤已经抓取过的Channel
         if self.channel_model.check_channel_exist(channel.id):
-            print(f"Already checked channel: {channel.username}")
+            logging.info(f"Already checked channel: {channel.username}")
             return
-        print(channel)
         is_teacher = False
         self.channel_model.add_channel(channel.id, channel.title, channel.username, is_teacher)
         self.channel_agent.get_channel_messages(channel)
@@ -200,11 +209,12 @@ class GroupAgent():
             self.channel_agent.get_channel_messages(channel)
         '''
     def process_chat_names(self, chat_names: list) -> None:
+        logger.info(f"Processing chat names: {chat_names}")
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
             if chat_name in self.chat_names:
-                print(f"Already checked chat: {chat_name}")
+                logger.info(f"Already checked chat: {chat_name}")
                 continue
             else:
                 self.chat_names[chat_name] = 1
@@ -217,15 +227,15 @@ class GroupAgent():
             try:
                 chat = self.client.get_entity(chat_name)
             except Exception as e:
-                print(f"Failed to get_entity {chat_name}: {e}")
+                logger.error(f"Failed to get_entity {chat_name}: {e}")
                 continue
     
             # 过滤User、广告号
             if isinstance(chat, User):
-                print(f"{chat_name} is a User")
+                logger.info(f"Ignore chat as user: {chat_name}")
                 continue
-            if filter_ad_entity_by_name(chat.title):
-                print(f"{chat_name} is a ad User")
+            if filter_entity_by_title(chat.title):
+                logger.info(f"Ignore chat as ad user: {chat_name},{chat.title}")
                 continue
             
             # 如果是Group

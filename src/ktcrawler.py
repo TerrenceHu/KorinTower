@@ -8,10 +8,13 @@ from telethon.errors import SessionPasswordNeededError
 from agents.group_agent import GroupAgent
 
 logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s",
+    level=logging.INFO,
+    datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.FileHandler("kt.log")
+    ]
 )
-# set higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
@@ -25,7 +28,7 @@ def main() -> None:
     # 创建连接
     client = TelegramClient(username, api_id, api_hash)
     client.start()
-    logger.info("Client Created")
+    logger.info(f"Client created: {username}")
 
     # 确认授权
     if not client.is_user_authorized():

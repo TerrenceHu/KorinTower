@@ -23,16 +23,14 @@ class ChannelModel:
         """
         添加一个新的 channel 记录
         """
-        insert_query = '''
+        query = '''
         INSERT INTO channels (id, title, username, is_teacher) VALUES (%s, %s, %s, %s);
         '''
-        try:
-            self.cursor.execute(insert_query, (id, title, username, is_teacher))
-            self.connection.commit()
-        except Error as e:
-            print(f"Error adding channel: {e}")
+        values = (id, title, username, is_teacher)
+        if not self._execute_query(query, values):
+            print(f"Error adding channel: {id}")
 
-    def check_channel_exist(self, id):
+    def does_channel_exist(self, id):
         """
         检查channel是否存在于 channels 表中
         """
@@ -41,88 +39,42 @@ class ChannelModel:
         result = self._fetch_one(query, values)
         return result[0]
 
-    def is_user_in_group(self, group_id: int, user_id: int) -> bool:
+    def get_all_channels(self):
         """
-        检查用户是否已经是群组成员
+        获取所有频道记录
         """
-        query = '''
-        SELECT COUNT(*) FROM group_members WHERE group_id = %s AND user_id = %s;
-        '''
-        try:
-            self.cursor.execute(query, (group_id, user_id))
-            count = self.cursor.fetchone()[0]
-            return count > 0
-        except Error as e:
-            print(f"Error checking if user exists in group: {e}")
-            return False
-
-
-    def add_user_to_group(self, group_id: int, user_id: int, updated_on: date):
-        """
-        将用户添加到群组中
-        """
-        if self.is_user_in_group(group_id, user_id):
-            return
-
-        insert_query = '''
-        INSERT INTO group_members (group_id, user_id, updated_on) VALUES (%s, %s, %s);
-        '''
-        try:
-            self.cursor.execute(insert_query, (group_id, user_id, updated_on))
-            self.connection.commit()
-        except Error as e:
-            print(f"Error adding user to group: {e} {group_id} {user_id}")
-
-
-    def get_all_groups(self):
-        """
-        获取所有群组记录
-        :return: 所有群组的列表
-        """
-        select_query = 'SELECT * FROM groups;'
+        select_query = 'SELECT * FROM channels;'
         try:
             self.cursor.execute(select_query)
             return self.cursor.fetchall()
         except Error as e:
-            print(f"Error retrieving groups: {e}")
+            print(f"Error retrieving channels: {e}")
             return []
 
-    def update_group_name(self, group_id: int, new_name: str):
+    def delete_channel(self, id: int):
         """
-        更新指定群组的名称
-        :param group_id: 要更新的群组ID
-        :param new_name: 新的群组名称
-        """
-        update_query = '''
-        UPDATE groups SET name = %s WHERE group_id = %s;
-        '''
-        try:
-            self.cursor.execute(update_query, (new_name, group_id))
-            self.connection.commit()
-        except Error as e:
-            print(f"Error updating group name: {e}")
-
-    def delete_group(self, group_id: int):
-        """
-        删除指定群组记录
-        :param group_id: 要删除的群组ID
+        删除指定频道记录
         """
         delete_query = '''
-        DELETE FROM groups WHERE group_id = %s;
+        DELETE FROM channels WHERE id = %s;
         '''
         try:
-            self.cursor.execute(delete_query, (group_id,))
+            self.cursor.execute(delete_query, (id,))
             self.connection.commit()
         except Error as e:
-            print(f"Error deleting group: {e}")
+            print(f"Error deleting channel: {e}")
 
-    def close_connection(self):
+    def _execute_query(self, query, values) -> bool:
         """
-        关闭数据库连接
+        Execute a query with optional parameters.
         """
-        if self.connection.is_connected():
-            self.cursor.close()
-            self.connection.close()
+        try:
+            self.cursor.execute(query, values)
+            self.connection.commit()
+            return True
+        except Error as e:
+            print(f"Error executing query: {e}")
+            return False
 
     def _fetch_one(self, query, values):
         """
@@ -136,25 +88,10 @@ class ChannelModel:
             print(f"Error fetching data: {e}")
             return None
 
-
-# 示例用法
-if __name__ == "__main__":
-    db_manager = GroupModel("rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com",
-                                "korin", "Python4x", "kt")
-    db_manager.add_user_to_group(1891648796, 98137104)
-
-    # 添加群组
-    #db_manager.add_group(123456789, "Example Group")
-
-    # 获取所有群组
-    #groups = db_manager.get_all_groups()
-    #print(groups)
-
-    # 更新群组名称
-    #db_manager.update_group_name(123456789, "Updated Group Name")
-
-    # 删除群组
-    #db_manager.delete_group(123456789)
-
-    # 关闭连接
-    db_manager.close_connection()
+    def close_connection(self):
+        """
+        关闭数据库连接
+        """
+        if self.connection.is_connected():
+            self.cursor.close()
+            self.connection.close()

@@ -29,13 +29,16 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    group = client.get_entity("JRXS1")
-    print(group)
+    group = client.get_entity("SZchujifuli")
+    #print(group)
     # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
-    members = client.iter_participants(2328524670, aggressive=True)
-    #for member in members:
-    #   print(member)
-    messages = client.iter_messages(2328524670)
+    members = client.get_participants(1524789233, aggressive=True)
+
+    print(len(members))
+    for member in members:
+       print(member)
+       
+    #messages = client.iter_messages(2328524670)
     #for message in messages:
     #    print(message)
     

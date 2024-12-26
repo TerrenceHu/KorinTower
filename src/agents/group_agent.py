@@ -60,9 +60,21 @@ class GroupAgent():
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
         today_date = date.today()
-        for id, name in self.group_model.get_all_groups():
+        for group_item in self.group_model.get_all_groups():
+            id, username = group_item[0], group_item[1]
+            logger.info(f"get_group_members group: {id},{username}")
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
-            members = self.client.iter_participants(id, aggressive=True)
+            try:
+                # TODO: 
+                # 1. 这里不知道为什么，先get_entity可以减少get_participants失败的情况
+                # 2. 需要记录获取成员失败的群，后续二次处理
+                if username:
+                    group = self.client.get_entity(username)
+                members = self.client.get_participants(id, aggressive=True)
+            except Exception as e:
+                logger.error(f"Failed to get participants of group {id},{username}: {e}")
+                continue
+
             for member in members:
                 # 过滤bot、广告号、已经爬过的用户，减少TG请求
                 # TODO: 可能用户信息会更新，需要重新爬取
@@ -129,71 +141,33 @@ class GroupAgent():
                 f.close()
             '''
 
-    # 加入 private chat
-    def join_private_chat(self, chat_name: str) -> bool:
-        chat_name = chat_name[1:]
-        try:
-            self.client(ImportChatInviteRequest(chat_name))
-            return True
-        except UserAlreadyParticipantError as e:
-            print(f"You have already joined private chat: {chat_name}")
-            return True
-        except InviteRequestSentError as e:
-            print(f"Successfully requested to join private channel: {chat_name}")
-        except Exception as e:
-            print(f"Failed to join private channel {chat_name}: {e} {type(e)}")
-        return False
-    # 加入 group
-    def join_group(self, chat: Channel) -> bool:
-        try:
-            self.client(JoinChannelRequest(chat))
-            print(f"Joined group {chat.title}")
-            return True
-        except UserAlreadyParticipantError as e:
-            print(f"You have already joined group: {chat.title}")
-            return True
-        except InviteRequestSentError as e:
-            print(f"Successfully requested to join group: {chat.title}")
-        except Exception as e:
-            print(f"Failed to join group {chat.title}: {e} {type(e)}")
-        return False
-
-    # 加入 channel
-    def join_channel(self, chat: Channel) -> bool:
-        try:
-            self.client(JoinChannelRequest(chat))
-            print(f"Joined channel {chat.title}")
-            return True
-        except UserAlreadyParticipantError as e:
-            print(f"You are already a participant of channel: {chat.title}")
-        except InviteRequestSentError as e:
-            print(f"Successfully requested to join channel: {chat.title}")
-        except Exception as e:
-            print(f"Failed to join channel {chat.title}: {e} {type(e)}")
-        return False
-
-    def process_group(self, group: Channel) -> None:
+    def process_group(self, group: Channel) -> bool:
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群，不是则不加入
-        if group.participants_count != None and group.participants_count < 1000:
-            logger.info(f"Too few members in group: {group.id},{group.username},{group.title}")
-            return
-        if filter_group_by_title(group.title):
-            logger.info(f"Filter ad group: {group.id},{group.username},{group.title}")
-            return
+        try:
+            if group.participants_count != None and group.participants_count < 1000:
+                logger.info(f"Too few members in group: {group.id},{group.username},{group.title}")
+                return True
+            if filter_group_by_title(group.title):
+                logger.info(f"Filter ad group: {group.id},{group.username},{group.title}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to filter group: {group.id}: {e}")
+            return False
+        
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group: {group.id},{group.username},{group.title}")
         else:
             self.group_model.add_group(group.id, group.username, group.title, group.join_request,
                                        group.participants_count, today_date)
             logger.info(f"Add new group to db: {group.id},{group.username},{group.title}")
-        return
+        return True
 
     def process_channel(self, channel: Channel):
-        logger.info(f"Processing channel: {channel.username},{channel.title}")
+        logger.info(f"Processing channel: {channel.id}{channel.username},{channel.title}")
         # 过滤已经抓取过的Channel
-        if self.channel_model.check_channel_exist(channel.id):
-            logging.info(f"Already checked channel: {channel.username}")
+        if self.channel_model.does_channel_exist(channel.id):
+            logging.info(f"Already checked channel: {channel.id}{channel.username},{channel.title}")
             return
         is_teacher = False
         self.channel_model.add_channel(channel.id, channel.title, channel.username, is_teacher)
@@ -211,7 +185,7 @@ class GroupAgent():
                 continue
             if chat_name in self.chat_names:
                 logger.info(f"Already checked chat: {chat_name}")
-                continue
+                continue 
             else:
                 self.chat_names[chat_name] = 1
 
@@ -242,3 +216,46 @@ class GroupAgent():
             # 如果是Channel
             else:
                 self.process_channel(chat)
+    # 加入 group
+    def join_group(self, chat: Channel) -> bool:
+        try:
+            self.client(JoinChannelRequest(chat))
+            print(f"Joined group {chat.title}")
+            return True
+        except UserAlreadyParticipantError as e:
+            print(f"You have already joined group: {chat.title}")
+            return True
+        except InviteRequestSentError as e:
+            print(f"Successfully requested to join group: {chat.title}")
+        except Exception as e:
+            print(f"Failed to join group {chat.title}: {e} {type(e)}")
+        return False
+    
+    # 加入 channel
+    def join_channel(self, chat: Channel) -> bool:
+        try:
+            self.client(JoinChannelRequest(chat))
+            print(f"Joined channel {chat.title}")
+            return True
+        except UserAlreadyParticipantError as e:
+            print(f"You are already a participant of channel: {chat.title}")
+        except InviteRequestSentError as e:
+            print(f"Successfully requested to join channel: {chat.title}")
+        except Exception as e:
+            print(f"Failed to join channel {chat.title}: {e} {type(e)}")
+        return False
+
+    # 加入 private chat
+    def join_private_chat(self, chat_name: str) -> bool:
+        chat_name = chat_name[1:]
+        try:
+            self.client(ImportChatInviteRequest(chat_name))
+            return True
+        except UserAlreadyParticipantError as e:
+            print(f"You have already joined private chat: {chat_name}")
+            return True
+        except InviteRequestSentError as e:
+            print(f"Successfully requested to join private channel: {chat_name}")
+        except Exception as e:
+            print(f"Failed to join private channel {chat_name}: {e} {type(e)}")
+        return False

@@ -14,6 +14,7 @@ def preprocess_text(text):
         print(item)
         tokens = list(jieba.cut(item))
         print([word for word in tokens if word not in stop_words])
+        print("---")
     '''
     tokens = list(jieba.cut(text))
     filtered_tokens = [word for word in tokens if word not in stop_words]
@@ -31,7 +32,7 @@ def main() -> None:
                 continue
             train_texts.append(preprocess_text(columns[2]))
             train_labels.append(columns[3])
-
+    '''
     vectorizer = CountVectorizer()
     X_train = vectorizer.fit_transform(train_texts)
 
@@ -59,6 +60,6 @@ def main() -> None:
     print("Predicted labels:", predicted_labels)
     print("True labels:", test_labels)
     print("Accuracy:", accuracy_score(test_labels, predicted_labels))
-
+    '''
 if __name__ == "__main__":
     main()

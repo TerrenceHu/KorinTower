@@ -19,14 +19,16 @@ class GroupModel:
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
 
-    def add_group(self, id: int, username: str):
+    def add_group(self, id: int, username: str, title: str, join_request: bool,
+                  participants_count: int, updated_on: date):
         """
         添加一个新的群组记录
         """
         query = '''
-        INSERT INTO `groups` (id, username) VALUES (%s, %s);
+        INSERT INTO `groups` (id, username, title, join_request, participants_count, updated_on)
+        VALUES (%s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username)
+        values = (id, username, title, join_request, participants_count, updated_on)
         if not self._execute_query(query, values):
             print(f"Error adding group: {id}")
 

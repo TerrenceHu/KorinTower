@@ -33,7 +33,7 @@ class UserModel:
         about = VALUES(about)
         '''
         values = (id, username, first_name, last_name, about)
-        if not self._execute_query(query, values)
+        if not self._execute_query(query, values):
             print(f"Error adding user: {id}")
 
     def does_user_exist(self, id):

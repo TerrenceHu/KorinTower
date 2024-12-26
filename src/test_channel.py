@@ -1,36 +1,16 @@
 from telethon.sync import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 import mysql.connector
 from mysql.connector import Error
 
-from agents.channel_agent import ChannelAgent
-from models.channel_model import ChannelModel
 from models.group_model import GroupModel
+from models.channel_model import ChannelModel
+from models.user_model import UserModel
 
-
+from agents.channel_agent import ChannelAgent
 
 def main() -> None:
-    db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
-    db_user = "korin"
-    db_password = "Python4x"
-    db_database = "kt"
-    group_model = GroupModel(host=db_host, user=db_user,
-                                    password=db_password, database=db_database)
-    id = 2010840625
-    query = "SELECT EXISTS(SELECT 1 FROM `groups` WHERE id = %s LIMIT 1)"
-    values = (id,)
-    connection = mysql.connector.connect(
-                host=db_host,
-                user=db_user,
-                password=db_password,
-                database=db_database,
-            )
-    cursor = connection.cursor()
-    cursor.execute(query, values)
-    result = cursor.fetchone()
-    print(result)
-
-    '''
     api_id = 25452895
     api_hash = "9054a96cc2c5fe1bff6c2aa2c8a85a95"
 
@@ -49,14 +29,24 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-
+    group = client.get_entity("JRXS1")
+    print(group)
+    # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
+    members = client.iter_participants(2328524670, aggressive=True)
+    #for member in members:
+    #   print(member)
+    messages = client.iter_messages(2328524670)
+    #for message in messages:
+    #    print(message)
+    
+    '''
     chat_name = "siyaobb"
     try:
         chat = client.get_entity(chat_name)
         print(chat)
     except Exception as e:
         print(f"Failed to get_entity {chat_name}: {e}")
-    
+
     channel_agent = ChannelAgent(client)
     channel_agent.parse_channel(chat)
     '''

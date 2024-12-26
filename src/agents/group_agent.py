@@ -1,4 +1,3 @@
-import json
 import logging
 import pytz
 from datetime import date, datetime, timedelta
@@ -11,22 +10,22 @@ from telethon.tl.types import User, Channel
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 from telethon import utils
 
-from agents.channel_agent import ChannelAgent
-
 from models.group_model import GroupModel
 from models.channel_model import ChannelModel
 from models.user_model import UserModel
 
+from agents.channel_agent import ChannelAgent
+
 from utils.chats import *
 
-logger = logging.getLogger(__name__)
 
-# get_input_entity, FloodWaitError
+logger = logging.getLogger(__name__)
+today_date = date.today()
 
 class GroupAgent():
     def __init__(self, client: TelegramClient) -> None:
         self.client = client
-        
+
         # 群组、频道和用户的数据库模型
         self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
         self.db_user = "korin"
@@ -38,7 +37,7 @@ class GroupAgent():
                                       password=self.db_password, database=self.db_database)
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
-        
+
         self.channel_agent = ChannelAgent(client)
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
@@ -49,21 +48,14 @@ class GroupAgent():
                 logger.info(f"Ignore dialog as user: {dialog.name}")
                 continue
             elif dialog.is_group:
-                # TODO：对广告群组，要退出
-                if filter_group_by_title(dialog.entity.title):
-                    logger.info(f"Filter dialog as ad group: {dialog.name},{dialog.entity.username}")
-                    continue
-                if not self.group_model.does_group_exist(dialog.entity.id):
-                    self.group_model.add_group(dialog.entity.id, dialog.entity.username)
-                    logger.info(f"Add new group to db: {dialog.name},{dialog.entity.username}")
+                self.process_group(dialog.entity)
             elif dialog.is_channel:
                 self.chat_channels[dialog.entity.id] = dialog.name
                 logger.info(f"Add new channel to dict: {dialog.name},{dialog.entity.username}")
                 #self.process_channel(dialog.entity)
-        
+
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
-        
 
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
@@ -82,7 +74,7 @@ class GroupAgent():
                     continue
                 if self.user_model.does_user_exist(member.id):
                     continue
-                
+
                 # 获取用户的info
                 try:
                     full_member = self.client(GetFullUserRequest(member))
@@ -102,7 +94,7 @@ class GroupAgent():
                 # 根据info再次过滤广告号，广告号没有价值且处理麻烦
                 if filter_entity_by_info(about):
                     continue
-                    
+
                 # 从info中获取新的群组或频道
                 chat_names = find_channel(full_member.full_user.about)
                 if len(chat_names) < 1:
@@ -119,7 +111,8 @@ class GroupAgent():
 
             # offset_date is used to get messages prior to that date
             messages = self.client.iter_messages(id, offset_date=today)
-        
+
+            '''
             # TODO:写入文件或者数据库
             f = open("data/%s.%s.messages" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
             csv_writer = csv.writer(f)
@@ -134,6 +127,7 @@ class GroupAgent():
                                     )
             else:
                 f.close()
+            '''
 
     # 加入 private chat
     def join_private_chat(self, chat_name: str) -> bool:
@@ -178,19 +172,21 @@ class GroupAgent():
             print(f"Failed to join channel {chat.title}: {e} {type(e)}")
         return False
 
-    def process_group(self, group: Channel):
+    def process_group(self, group: Channel) -> None:
+        # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群，不是则不加入
-        # 过滤成员少于1000、已经加入的Group
         if group.participants_count != None and group.participants_count < 1000:
-            print(f"Too few members in group: {group.username}")
+            logger.info(f"Too few members in group: {group.id},{group.username},{group.title}")
             return
         if filter_group_by_title(group.title):
-            print(f"Filter ad group {group.username} {group.title}")
+            logger.info(f"Filter ad group: {group.id},{group.username},{group.title}")
             return
         if self.group_model.does_group_exist(group.id):
-            print(f"Already checked group: {group.username}")
-            return
-        #self.join_group(group)
+            logger.info(f"Already added group: {group.id},{group.username},{group.title}")
+        else:
+            self.group_model.add_group(group.id, group.username, group.title, group.join_request,
+                                       group.participants_count, today_date)
+            logger.info(f"Add new group to db: {group.id},{group.username},{group.title}")
         return
 
     def process_channel(self, channel: Channel):
@@ -220,16 +216,18 @@ class GroupAgent():
                 self.chat_names[chat_name] = 1
 
             # TODO: 加入 private chat 怎么处理？
+            '''
             if chat_name.startswith("+"):
                 self.join_private_chat(chat_name)
                 continue
+            '''
 
             try:
                 chat = self.client.get_entity(chat_name)
             except Exception as e:
                 logger.error(f"Failed to get_entity {chat_name}: {e}")
                 continue
-    
+
             # 过滤User、广告号
             if isinstance(chat, User):
                 logger.info(f"Ignore chat as user: {chat_name}")
@@ -237,7 +235,7 @@ class GroupAgent():
             if filter_entity_by_title(chat.title):
                 logger.info(f"Ignore chat as ad user: {chat_name},{chat.title}")
                 continue
-            
+
             # 如果是Group
             if chat.megagroup == True:
                 self.process_group(chat)

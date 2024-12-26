@@ -16,7 +16,11 @@ COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS kt.groups;
 CREATE TABLE kt.groups (
 	id BIGINT PRIMARY KEY,
-	username VARCHAR(100)
+	username VARCHAR(100),
+	title VARCHAR(255),
+	join_request BOOLEAN,
+	participants_count BIGINT,
+	updated_on DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

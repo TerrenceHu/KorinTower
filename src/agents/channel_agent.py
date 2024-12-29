@@ -26,7 +26,6 @@ class ChannelAgent():
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
 
-
     # 解析Channel消息
     def parse_channel(self, channel: Channel) -> bool:
         messages = self.client.iter_messages(channel.id, limit=100, reverse=True)
@@ -42,6 +41,7 @@ class ChannelAgent():
         csv_writer = csv.writer(f, delimiter='\t')
 
         content = []
+        # 只抓取最早的100条消息，通常包含老师的课表信息
         messages = self.client.iter_messages(channel.id, limit=100, reverse=True)
         for message in messages:
             message_text = message.message

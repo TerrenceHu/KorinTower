@@ -12,11 +12,11 @@ class UserModel:
                 user=user,
                 password=password,
                 database=database,
+                charset='utf8mb4'
             )
             self.cursor = self.connection.cursor()
         except Error as e:
             print(f"Error connecting to MySQL Database: {e}")
-
 
     def add_user(self, id, username, first_name, last_name, about):
         """
@@ -58,7 +58,7 @@ class UserModel:
             return []
 
     def get_user_by_id(self, id):
-        """Retrieve a user by their ID."""
+        """Retrieve a user by ID."""
         query = "SELECT * FROM users WHERE id = %s"
         values = (id,)
         result = self._fetch_one(query, values)
@@ -85,8 +85,8 @@ class UserModel:
             values.append(about)
 
         set_clause_str = ", ".join(set_clause)
-        query = f"UPDATE users SET {set_clause_str} WHERE user_id = %s"
-        values.append(user_id)
+        query = f"UPDATE users SET {set_clause_str} WHERE id = %s"
+        values.append(id)
 
         self._execute_query(query, tuple(values))
 

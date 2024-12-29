@@ -1,7 +1,10 @@
+import logging
 from datetime import date
 
 import mysql.connector
 from mysql.connector import Error
+
+logger = logging.getLogger(__name__)
 
 class GroupModel:
     def __init__(self, host, user, password, database):
@@ -14,10 +17,11 @@ class GroupModel:
                 user=user,
                 password=password,
                 database=database,
+                charset='utf8mb4'
             )
             self.cursor = self.connection.cursor()
         except Error as e:
-            print(f"Error connecting to MySQL Database: {e}")
+            logger.error(f"Error connecting to MySQL Database: {e}")
 
     def add_group(self, id: int, username: str, title: str, join_request: bool,
                   participants_count: int, updated_on: date):
@@ -30,7 +34,7 @@ class GroupModel:
         '''
         values = (id, username, title, join_request, participants_count, updated_on)
         if not self._execute_query(query, values):
-            print(f"Error adding group: {id}")
+            logger.error(f"Error adding group {id},{username}")
 
     def does_group_exist(self, id):
         """
@@ -39,6 +43,8 @@ class GroupModel:
         query = "SELECT EXISTS(SELECT 1 FROM `groups` WHERE id = %s LIMIT 1)"
         values = (id,)
         result = self._fetch_one(query, values)
+        if result is None:
+            return False
         return result[0]
 
     def get_all_groups(self):
@@ -50,9 +56,16 @@ class GroupModel:
             self.cursor.execute(select_query)
             return self.cursor.fetchall()
         except Error as e:
-            print(f"Error retrieving groups: {e}")
+            logger.error(f"Error retrieving all groups: {e}")
             return []
 
+    def get_group_by_id(self, id):
+        """Retrieve a group by ID."""
+        query = "SELECT * FROM `groups` WHERE id = %s"
+        values = (id,)
+        result = self._fetch_one(query, values)
+        return result
+    
     def add_user_to_group(self, group_id: int, user_id: int, updated_on: date):
         """
         将用户添加到群组中
@@ -67,7 +80,7 @@ class GroupModel:
             self.cursor.execute(insert_query, (group_id, user_id, updated_on))
             self.connection.commit()
         except Error as e:
-            print(f"Error adding user to group: {e} {group_id} {user_id}")
+            logger.error(f"Error adding user to group: {e} {group_id} {user_id}")
 
     def is_user_in_group(self, group_id: int, user_id: int) -> bool:
         """
@@ -81,7 +94,7 @@ class GroupModel:
             count = self.cursor.fetchone()[0]
             return count > 0
         except Error as e:
-            print(f"Error checking if user exists in group: {e}")
+            logger.error(f"Error checking if user exists in group {group_id},{user_id}: {e}")
             return False
 
     def delete_group(self, id: int):
@@ -95,7 +108,7 @@ class GroupModel:
             self.cursor.execute(delete_query, (id,))
             self.connection.commit()
         except Error as e:
-            print(f"Error deleting group: {e}")
+            logger.error(f"Error deleting group {id}: {e}")
 
     def _execute_query(self, query, values) -> bool:
         """
@@ -106,7 +119,7 @@ class GroupModel:
             self.connection.commit()
             return True
         except Error as e:
-            print(f"Error executing query: {e}")
+            logger.error(f"Error executing query: {e}")
             return False
 
     def _fetch_one(self, query, values):
@@ -118,7 +131,7 @@ class GroupModel:
             result = self.cursor.fetchone()
             return result
         except Error as e:
-            print(f"Error fetching data: {e}")
+            logger.error(f"Error fetching data: {e}")
             return None
 
     def close_connection(self):

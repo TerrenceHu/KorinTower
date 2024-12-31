@@ -185,7 +185,7 @@ class GroupAgent():
                 continue
             if chat_name in self.chat_names:
                 logger.info(f"Already checked chat: {chat_name}")
-                continue 
+                continue
             else:
                 self.chat_names[chat_name] = 1
 

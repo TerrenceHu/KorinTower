@@ -59,7 +59,7 @@ COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS kt.channel_messages;
 CREATE TABLE kt.channel_messages (
-	channels_id BIGINT NOT NULL,
+	channel_id BIGINT NOT NULL,
 	message_id BIGINT NOT NULL,
 	message TEXT,
 	dt DATETIME,

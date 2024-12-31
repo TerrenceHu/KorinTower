@@ -1,5 +1,6 @@
 import logging
 import pytz
+from configparser import ConfigParser
 from datetime import date, datetime, timedelta
 
 from telethon.sync import TelegramClient
@@ -15,7 +16,6 @@ from models.channel_model import ChannelModel
 from models.user_model import UserModel
 
 from agents.channel_agent import ChannelAgent
-
 from utils.chats import *
 
 
@@ -23,14 +23,15 @@ logger = logging.getLogger(__name__)
 today_date = date.today()
 
 class GroupAgent():
-    def __init__(self, client: TelegramClient) -> None:
+    def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
         self.client = client
+        self.config = config
 
         # 群组、频道和用户的数据库模型
-        self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
-        self.db_user = "korin"
-        self.db_password = "Python4x"
-        self.db_database = "kt"
+        self.db_host = config.get('DATABASE', 'db_host')
+        self.db_user = config.get('DATABASE', 'db_user')
+        self.db_password = config.get('DATABASE', 'db_password')
+        self.db_database = config.get('DATABASE', 'db_database')
         self.user_model = UserModel(host=self.db_host, user=self.db_user,
                                     password=self.db_password, database=self.db_database)
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,
@@ -38,7 +39,7 @@ class GroupAgent():
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
 
-        self.channel_agent = ChannelAgent(client)
+        self.channel_agent = ChannelAgent(client, config)
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
@@ -168,7 +169,7 @@ class GroupAgent():
             logger.info(f"Filter ad channel: {channel.id},{channel.username},{channel.title}")
             return True
         if self.channel_model.does_channel_exist(channel.id):
-            logging.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
+            logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
         else:
             is_teacher = False
             self.channel_model.add_channel(channel.id, channel.username, channel.title, channel.join_request,

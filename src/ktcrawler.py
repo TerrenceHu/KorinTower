@@ -1,11 +1,11 @@
 import logging
-import configparser
-import socks
+from configparser import ConfigParser
 
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
 from agents.group_agent import GroupAgent
+
 
 logging.basicConfig(
     format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s",
@@ -17,18 +17,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-api_id = 25452895
-api_hash = "9054a96cc2c5fe1bff6c2aa2c8a85a95"
-
-phone = "+8618600874536"
-username = "terrencehu"
-
 def main() -> None:
+    # 读取配置
+    config = ConfigParser()
+    config.read('config/config.ini')
+
+    username = config.get('TG', 'username')
+    phone = config.get('TG', 'phone')
+    api_id = int(config.get('TG', 'api_id'))
+    api_hash = config.get('TG', 'api_hash')
+
     # 创建连接
     client = TelegramClient(username, api_id, api_hash)
     client.start()
-    logger.info(f"Client created: {username}")
+    logger.info(f"TelegramClient created for {username}")
 
     # 确认授权
     if not client.is_user_authorized():
@@ -38,7 +40,7 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    group_agent = GroupAgent(client)
+    group_agent = GroupAgent(client, config)
     # 获取群成员信息，存量，可以每个月一次
     group_agent.get_group_members()
     # 获取群消息，增量，每天一次

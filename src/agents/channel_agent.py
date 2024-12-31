@@ -1,28 +1,26 @@
+import logging
 import csv
-import pytz
-from datetime import date, datetime, timedelta
+from configparser import ConfigParser
+from datetime import date
 
 from telethon.sync import TelegramClient
-from telethon.tl.functions.users import GetFullUserRequest
-from telethon.tl.functions.channels import JoinChannelRequest
-from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import User, Channel
-from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
-from telethon import utils
+from telethon.tl.types import Channel
 
 from models.channel_model import ChannelModel
-
 from utils.chats import *
 
 
+logger = logging.getLogger(__name__)
+today_date = date.today()
+
 class ChannelAgent():
-    def __init__(self, client: TelegramClient) -> None:
+    def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
         self.client = client
 
-        self.db_host = "rm-wz9682u97cx7e84l1xo.mysql.rds.aliyuncs.com"
-        self.db_user = "korin"
-        self.db_password = "Python4x"
-        self.db_database = "kt"
+        self.db_host = config.get('DATABASE', 'db_host')
+        self.db_user = config.get('DATABASE', 'db_user')
+        self.db_password = config.get('DATABASE', 'db_password')
+        self.db_database = config.get('DATABASE', 'db_database')
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
 

@@ -41,8 +41,8 @@ class ChannelAgent():
         csv_writer = csv.writer(f, delimiter='\t')
 
         content = []
-        # 只抓取最早的100条消息，通常包含老师的课表信息
-        messages = self.client.iter_messages(channel.id, limit=100, reverse=True)
+        # 只抓取最早的200条消息，通常包含老师的课表信息
+        messages = self.client.iter_messages(channel.id, limit=200, reverse=True)
         for message in messages:
             message_text = message.message
             if message_text:

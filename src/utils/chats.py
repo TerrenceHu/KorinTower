@@ -1,4 +1,6 @@
+import os
 import re
+import requests
 
 def find_channel(about):
     pattern = r't\.me/([\w+-]+)'
@@ -39,3 +41,26 @@ def filter_entity_by_info(info: str) -> bool:
         if key_word in str(info):
             return True
     return False
+
+def read_prompt_template(file_path: str) -> str:
+    """读取prompt模板文件"""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Prompt template file not found: {file_path}")
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
+    
+
+def call_qwen_plus(prompt: str, api_url: str, api_key: str) -> str:
+    """调用通义千问Plus模型"""
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+    data = {
+        "prompt": prompt
+    }
+    response = requests.post(api_url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json().get("response", "")
+    else:
+        raise Exception(f"API request failed with status code {response.status_code}: {response.text}")

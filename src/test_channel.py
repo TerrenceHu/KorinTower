@@ -30,12 +30,35 @@ def main() -> None:
             client.sign_in(password=input('Password: '))
 
 
-       
-    messages = client.iter_messages(2056779794)
+    pinned_messages = []
+    candidate_messages = []
+    prompt_messages = []
+    messages = client.iter_messages(2056779794, limit=200, reverse=True)
     for message in messages:
-        print(message)
+        if message.message:
+            message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+            if message.pinned:
+                pinned_messages.append(message_text)
+                print(message_text)
+            else:
+                candidate_messages.append(message_text)
+    content_len = 0
+    for message_text in pinned_messages:
+        if content_len >= 5000:
+            break
+        prompt_messages.append(message_text)
+        content_len += len(message_text)
+    for message_text in candidate_messages:
+        if content_len >= 5000:
+            break
+        prompt_messages.append(message_text)
+        content_len += len(message_text)
 
+    content = ";".join(prompt_messages)
 
+    print(content)
+
+    return
 
 
 if __name__ == "__main__":

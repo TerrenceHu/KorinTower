@@ -176,7 +176,6 @@ class GroupAgent():
                                            channel.participants_count, today_date, is_teacher)
             logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
             self.channel_agent.get_channel_messages(channel)
-            #self.channel_agent.parse_channel(channel)
         return True
 
     def process_chat_names(self, chat_names: list) -> None:

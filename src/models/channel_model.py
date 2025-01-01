@@ -51,7 +51,7 @@ class ChannelModel:
         """
         获取所有频道记录
         """
-        select_query = 'SELECT * FROM channels;'
+        select_query = "SELECT * FROM channels;"
         try:
             self.cursor.execute(select_query)
             return self.cursor.fetchall()
@@ -60,9 +60,9 @@ class ChannelModel:
             return []
     def get_channel_by_id(self, id):
         """Retrieve a channel by ID."""
-        query = "SELECT * FROM channels WHERE id = %s"
+        select_query = "SELECT * FROM channels WHERE id = %s;"
         values = (id,)
-        result = self._fetch_one(query, values)
+        result = self._fetch_one(select_query, values)
         return result
     
     def add_message_to_channel(self, channel_id: int, message_id: int, message: str, dt: datetime):
@@ -81,6 +81,18 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error adding message to channel {channel_id},{message_id}: {e}")
 
+    def get_channel_messages(self, channel_id: int):
+        """
+        获取渠道的消息
+        """        
+        select_query = "SELECT * FROM channel_messages WHERE channel_id = %s;"
+        try:
+            self.cursor.execute(select_query, (channel_id,))
+            return self.cursor.fetchall()
+        except Error as e:
+            logger.error(f"Error retrieving all messages for channel {channel_id}: {e}")
+            return []
+        
     def is_message_in_channel(self, channel_id: int, message_id: int) -> bool:
         """
         检查渠道的消息是否已经记录

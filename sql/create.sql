@@ -62,6 +62,7 @@ CREATE TABLE kt.channel_messages (
 	channel_id BIGINT NOT NULL,
 	message_id BIGINT NOT NULL,
 	message TEXT,
+	pinned BOOLEAN DEFAULT FALSE,
 	dt DATETIME,
 	PRIMARY KEY (channels_id, message_id)
 )

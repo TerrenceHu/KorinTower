@@ -65,7 +65,8 @@ class ChannelModel:
         result = self._fetch_one(select_query, values)
         return result
     
-    def add_message_to_channel(self, channel_id: int, message_id: int, message: str, dt: datetime):
+    def add_message_to_channel(self, channel_id: int, message_id: int,
+                               message: str, pinned: bool, dt: datetime):
         """
         将消息添加到渠道中
         """
@@ -73,10 +74,10 @@ class ChannelModel:
             return
 
         insert_query = '''
-        INSERT INTO channel_messages (channel_id, message_id, message, dt) VALUES (%s, %s, %s, %s);
+        INSERT INTO channel_messages (channel_id, message_id, message, pinned, dt) VALUES (%s, %s, %s, %s, %s);
         '''
         try:
-            self.cursor.execute(insert_query, (channel_id, message_id, message, dt))
+            self.cursor.execute(insert_query, (channel_id, message_id, message, pinned, dt))
             self.connection.commit()
         except Error as e:
             logger.error(f"Error adding message to channel {channel_id},{message_id}: {e}")

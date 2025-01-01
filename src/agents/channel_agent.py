@@ -6,6 +6,8 @@ from datetime import date
 from telethon.sync import TelegramClient
 from telethon.tl.types import Channel
 
+import dashscope
+
 from models.channel_model import ChannelModel
 from utils.chats import *
 
@@ -35,7 +37,8 @@ class ChannelAgent():
         for message in messages:
             if message.message:
                 message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-                self.channel_model.add_message_to_channel(channel.id, message.id, message_text, message.date)
+                self.channel_model.add_message_to_channel(channel.id, message.id, message_text,
+                                                          message.pinned, message.date)
                 if message.pinned:
                     pinned_messages.append(message_text)
                     print(message_text)
@@ -98,6 +101,17 @@ class ChannelAgent():
             except FileNotFoundError as e:
                 logger.error(e)
                 continue
-            print(prompt_template)
-            prompt = prompt_template.format(content=content)
-            print(prompt)
+            system_prompt = prompt_template % (content)
+
+            messages = [
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': ''}
+                ]
+            response = dashscope.Generation.call(
+                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
+                model="qwen-plus",
+                messages=messages,
+                result_format='message'
+                )
+            print(content)
+            print(response)

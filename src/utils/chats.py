@@ -49,7 +49,6 @@ def read_prompt_template(file_path: str) -> str:
     with open(file_path, 'r', encoding='utf-8') as file:
         return file.read()
     
-
 def call_qwen_plus(prompt: str, api_url: str, api_key: str) -> str:
     """调用通义千问Plus模型"""
     headers = {

@@ -24,15 +24,15 @@ class ChannelModel:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
     def add_channel(self, id: int, username: str, title: str, join_request: bool,
-                    participants_count: int, updated_on: date, is_teacher: bool):
+                    participants_count: int, updated_on: date):
         """
         添加一个新的 channel 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, join_request, participants_count, updated_on, is_teacher)
-        VALUES (%s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO channels (id, username, title, join_request, participants_count, updated_on)
+        VALUES (%s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, join_request, participants_count, updated_on, is_teacher)
+        values = (id, username, title, join_request, participants_count, updated_on)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 
@@ -64,9 +64,10 @@ class ChannelModel:
         values = (id,)
         result = self._fetch_one(select_query, values)
         return result
-    
-    def add_message_to_channel(self, channel_id: int, message_id: int,
-                               message: str, pinned: bool, dt: datetime):
+
+    def add_message_to_channel(self, channel_id: int, message_id: int, message: str,
+                               pinned: bool, comments: bool, replies: int,
+                               reactions: int, views: int, dt: datetime):
         """
         将消息添加到渠道中
         """
@@ -74,10 +75,11 @@ class ChannelModel:
             return
 
         insert_query = '''
-        INSERT INTO channel_messages (channel_id, message_id, message, pinned, dt) VALUES (%s, %s, %s, %s, %s);
+        INSERT INTO channel_messages (channel_id, message_id, message, pinned, comments, replies, reactions, views, dt)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
         '''
         try:
-            self.cursor.execute(insert_query, (channel_id, message_id, message, pinned, dt))
+            self.cursor.execute(insert_query, (channel_id, message_id, message, pinned, comments, replies, reactions, views, dt))
             self.connection.commit()
         except Error as e:
             logger.error(f"Error adding message to channel {channel_id},{message_id}: {e}")
@@ -108,6 +110,16 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error checking if message exists in channel {channel_id},{message_id}: {e}")
             return False
+
+    def update_channel_type(self, channel_id: int, type: int) -> bool:
+        """
+        更新指定频道的 type 字段
+        """
+        update_query = '''
+        UPDATE channels SET type = %s WHERE id = %s;
+        '''
+        values = (type, channel_id)
+        return self._execute_query(update_query, values)
 
     def delete_channel(self, id: int):
         """

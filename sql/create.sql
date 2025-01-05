@@ -51,7 +51,7 @@ CREATE TABLE kt.channels (
 	join_request BOOLEAN,
 	participants_count BIGINT,
 	updated_on DATE,
-	is_teacher BOOLEAN DEFAULT FALSE
+	type INT DEFAULT 0
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -63,8 +63,12 @@ CREATE TABLE kt.channel_messages (
 	message_id BIGINT NOT NULL,
 	message TEXT,
 	pinned BOOLEAN DEFAULT FALSE,
+	comments BOOLEAN DEFAULT FALSE,
+	replies INT DEFAULT 0,
+	reactions INT DEFAULT 0,
+	views INT DEFAULT 0,
 	dt DATETIME,
-	PRIMARY KEY (channels_id, message_id)
+	PRIMARY KEY (channel_id, message_id)
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

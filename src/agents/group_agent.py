@@ -139,20 +139,20 @@ class GroupAgent():
                 f.close()
             '''
 
-    def process_group(self, group: Channel) -> bool:
+    def process_group(self, group: Channel):
         logger.info(f"Processing group: {group.id},{group.username},{group.title}")
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群
         try:
             if group.participants_count != None and group.participants_count < 1000:
                 logger.info(f"Too few members in group: {group.id},{group.username},{group.title}")
-                return True
+                return
             if filter_group_by_title(group.title):
                 logger.info(f"Filter ad group: {group.id},{group.username},{group.title}")
-                return True
+                return
         except Exception as e:
             logger.error(f"Failed to filter group: {group.id}: {e}")
-            return False
+            return
         
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group: {group.id},{group.username},{group.title}")
@@ -160,23 +160,21 @@ class GroupAgent():
             self.group_model.add_group(group.id, group.username, group.title, group.join_request,
                                        group.participants_count, today_date)
             logger.info(f"Add new group to db: {group.id},{group.username},{group.title}")
-        return True
 
-    def process_channel(self, channel: Channel) -> bool:
+    def process_channel(self, channel: Channel):
         logger.info(f"Processing channel: {channel.id},{channel.username},{channel.title}")
         # 过滤广告、已经抓取过的Channel
         if filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel: {channel.id},{channel.username},{channel.title}")
-            return True
+            return
+        
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
         else:
-            is_teacher = False
             self.channel_model.add_channel(channel.id, channel.username, channel.title, channel.join_request,
-                                           channel.participants_count, today_date, is_teacher)
+                                           channel.participants_count, today_date)
             logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
-            self.channel_agent.get_channel_messages(channel)
-        return True
+            self.channel_agent.parse_channel(channel)
 
     def process_chat_names(self, chat_names: list) -> None:
         logger.info(f"Processing chat names: {chat_names}")

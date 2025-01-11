@@ -4,6 +4,7 @@ from telethon.errors import SessionPasswordNeededError
 
 from agents.channel_agent import ChannelAgent
 
+
 def main() -> None:
     # 读取配置
     config = ConfigParser()

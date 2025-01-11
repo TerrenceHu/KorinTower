@@ -120,6 +120,16 @@ class ChannelModel:
         '''
         values = (type, channel_id)
         return self._execute_query(update_query, values)
+    
+    def increment_retries(self, channel_id: int) -> bool:
+        """
+        增加指定频道的 retries 字段值
+        """
+        update_query = '''
+        UPDATE channels SET retries = retries + 1 WHERE id = %s;
+        '''
+        values = (channel_id,)
+        return self._execute_query(update_query, values)
 
     def delete_channel(self, id: int):
         """

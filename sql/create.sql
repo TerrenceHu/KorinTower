@@ -51,7 +51,8 @@ CREATE TABLE kt.channels (
 	join_request BOOLEAN,
 	participants_count BIGINT,
 	updated_on DATE,
-	type INT DEFAULT 0
+	type INT DEFAULT 0,
+	retries INT DEFAULT 0
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

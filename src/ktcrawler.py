@@ -42,15 +42,15 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    #@group_agent = GroupAgent(client, config)
+    group_agent = GroupAgent(client, config)
     # 获取群成员信息，存量，可以每个月一次
     #group_agent.get_group_members()
     # 获取群消息，增量，每天一次
     #group_agent.get_group_messages()
 
-    channel_agent = ChannelAgent(client, config)
-    channel_agent.update_channels()
-    #channel_agent.update_channel(1619393751)
+    #channel_agent = ChannelAgent(client, config)
+    #channel_agent.batch_parse_channel()
+    #channel_agent.single_parse_channel(2478752375)
 
 if __name__ == "__main__":
     main()

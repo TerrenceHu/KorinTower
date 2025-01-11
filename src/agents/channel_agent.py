@@ -1,6 +1,5 @@
 import os
 import logging
-import csv
 from datetime import date
 from configparser import ConfigParser
 
@@ -8,6 +7,7 @@ from telethon.sync import TelegramClient
 from telethon.tl.types import Channel, MessageMediaPhoto
 
 from paddleocr import PaddleOCR
+from http import HTTPStatus
 import dashscope
 
 from models.channel_model import ChannelModel
@@ -31,15 +31,15 @@ class ChannelAgent():
         self.media_path = config.get('APPLICATION', 'media_path')
         self.ocr = PaddleOCR(lang='ch')
 
-        prompt_template_file = 'config/prompt_template.txt'
+        type_prompt_template_file = 'config/type_prompt_template.txt'
         try:
-            self.prompt_template = read_prompt_template(prompt_template_file)
+            self.type_prompt_template = read_prompt_template(type_prompt_template_file)
         except FileNotFoundError as e:
-            logger.error(f"Prompt template file not found: {prompt_template_file}")
+            logger.error(f"Prompt template file not found: {type_prompt_template_file}")
 
-    def llm_parse(self, content: str):
+    def llm_judge_type(self, content: str) -> int:
         # 读取prompt模板文件
-        system_prompt = self.prompt_template % (content)
+        system_prompt = self.type_prompt_template % (content)
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': ''}
@@ -52,9 +52,23 @@ class ChannelAgent():
                 result_format='message',
                 temperature=0.1
                 )
+            print(content)
+            print(response)
         except Exception as e:
-            return None
-        return response
+            logger.error(f"LLM parse type error for {content}: {e}")
+            return 0
+        if response.status_code != HTTPStatus.OK:
+            logger.error(f"LLM parse type error {response}")
+            return 0
+        
+        output = response.output.choices[0].message.content
+        if output.startswith('按摩师'):
+            return 1
+        elif output.startswith('导航'):
+            return 2
+        elif output.startswith('其他'):
+            return 100
+        return 0
 
     # 抓取Channel消息，并调用LLM判断channel类型
     def parse_channel(self, channel: Channel):
@@ -89,33 +103,37 @@ class ChannelAgent():
                         ocr_results = self.ocr.ocr(file_name, cls=False)
                     except Exception as e:
                         logger.error(f"Download or OCR error for {channel.id},{message.id}: {e}")
-
-                    photo_text_list = []
-                    for ocr_result in ocr_results:
-                        if ocr_result == None:
-                            break
-                        for text in ocr_result:
-                            photo_text_list.append(text[-1][0])
-                    if len(photo_text_list) > 0:
-                        photo_text = ' '.join(photo_text_list)
-                        message_text = photo_text + ' ' + message_text
+                    else:
+                        photo_text_list = []
+                        for ocr_result in ocr_results:
+                            if ocr_result == None:
+                                break
+                            for line in ocr_result:
+                                photo_text_list.append(line[-1][0])
+                        if len(photo_text_list) > 0:
+                            photo_text = ' '.join(photo_text_list)
+                            message_text = photo_text + ' ' + message_text
                 pinned_messages.append(message_text)
             else:
                 candidate_messages.append(message_text)
-            
+
             self.channel_model.add_message_to_channel(channel.id, message.id, message_text, message.pinned,
                                                       comments, replies, reactions, views, message.date)
 
+        self.channel_model.increment_retries(channel.id)
         prompt_messages = []
         content_len = 0
         for message_text in pinned_messages:
-            if content_len >= 5000:
+            if content_len >= 3000:
                 break
             prompt_messages.append(message_text)
             content_len += len(message_text)
         for message_text in candidate_messages:
-            if content_len >= 5000:
+            if content_len >= 3000:
                 break
+            # 太长的消息不加入prompt
+            if len(message_text) > 1000:
+                continue
             prompt_messages.append(message_text)
             content_len += len(message_text)
 
@@ -123,25 +141,29 @@ class ChannelAgent():
         if content == "":
             return
 
-        response = self.llm_parse(content)
-        if response == None:
-            logger.error(f"LLM parse error for channel {channel.id}")
-            return
+        channel_type = self.llm_judge_type(content)
+        if channel_type != 0:
+            self.channel_model.update_channel_type(channel.id, channel_type)
+        
+        if channel_type == 1:
 
-        print(content)
-        print(response)
+        
 
-    def update_channels(self):
+    def batch_parse_channel(self):
         all_channels = self.channel_model.get_all_channels()
         for channel in all_channels:
-            print(f"=========================={channel[0]},{channel[1]},{channel[2]}")
+            # 如果已经解析过，或者解析失败次数过多，跳过
+            if channel[6] != 0 or channel[7] > 3:
+                continue
 
+            self.channel_model.increment_retries(channel[0])
+            logger.info(f"parse channel: {channel[0]},{channel[1]},{channel[2]}")
             messages = self.channel_model.get_channel_messages(channel[0])
 
             # 为了控制prompt的token数，优先用pinned消息，再用其他消息
             pinned_messages, candidate_messages, prompt_messages = [], [], []
             for message in messages:
-                message_text, pinned, comments, replies, reactions, views = message[2:8]
+                message_text, pinned = message[2:4]
                 if pinned:
                     pinned_messages.append(message_text)
                 else:
@@ -149,13 +171,16 @@ class ChannelAgent():
 
             content_len = 0
             for message_text in pinned_messages:
-                if content_len >= 5000:
+                if content_len >= 3000:
                     break
                 prompt_messages.append(message_text)
                 content_len += len(message_text)
             for message_text in candidate_messages:
-                if content_len >= 5000:
+                if content_len >= 3000:
                     break
+                # 太长的消息不加入prompt
+                if len(message_text) > 1000:
+                    continue
                 prompt_messages.append(message_text)
                 content_len += len(message_text)
 
@@ -163,35 +188,25 @@ class ChannelAgent():
             if content == "":
                 continue
 
-            # 读取prompt模板文件
-            system_prompt = self.prompt_template % (content)
-            messages = [
-                {'role': 'system', 'content': system_prompt},
-                {'role': 'user', 'content': ''}
-                ]
-            try:
-                response = dashscope.Generation.call(
-                    api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
-                    model="qwen-plus",
-                    messages=messages,
-                    result_format='message',
-                    temperature=0.1
-                )
-            except Exception as e:
-                print(f"LLM API error for {channel[0]}: {e}")
-                continue
-            print(content)
-            print()
-            print(response)
-            print()
+            channel_type = self.llm_judge_type(content)
+            if channel_type != 0:
+                self.channel_model.update_channel_type(channel[0], channel_type)
 
-    def pp_channel_messages(self, channel_id):
-        messages = self.channel_model.get_channel_messages(channel_id)
+    def single_parse_channel(self, channel_id):
+        self.channel_model.increment_retries(channel_id)
+        try:
+            channel = self.client.get_entity(channel_id)
+        except Exception as e:
+            logger.error(f"Failed to get_entity for channel {channel_id}: {e}")
+            return
+        
+        logger.info(f"parse channel: {channel.id},{channel.username},{channel.title}")
+        messages = self.channel_model.get_channel_messages(channel.id)
 
         # 为了控制prompt的token数，优先用pinned消息，再用其他消息
         pinned_messages, candidate_messages, prompt_messages = [], [], []
         for message in messages:
-            message_text, pinned, comments, replies, reactions, views = message[2:8]
+            message_text, pinned = message[2:4]
             if pinned:
                 pinned_messages.append(message_text)
             else:
@@ -199,34 +214,24 @@ class ChannelAgent():
 
         content_len = 0
         for message_text in pinned_messages:
-            if content_len >= 5000:
+            if content_len >= 3000:
                 break
             prompt_messages.append(message_text)
             content_len += len(message_text)
         for message_text in candidate_messages:
-            if content_len >= 5000:
+            if content_len >= 3000:
                 break
+            # 太长的消息不加入prompt
+            if len(message_text) > 1000:
+                continue
             prompt_messages.append(message_text)
             content_len += len(message_text)
 
         content = ";".join(prompt_messages)
         if content == "":
             return
+    
+        channel_type = self.llm_judge_type(content)
+        if channel_type != 0:
+            self.channel_model.update_channel_type(channel.id, channel_type)
 
-        # 读取prompt模板文件
-        system_prompt = self.prompt_template % (content)
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': ''}
-            ]
-        
-        response = dashscope.Generation.call(
-            api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
-            model="qwen-plus",
-            messages=messages,
-            result_format='message',
-            temperature=0.1
-            )
-        print(content)
-        print()
-        print(response)

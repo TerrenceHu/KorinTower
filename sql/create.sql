@@ -48,11 +48,11 @@ CREATE TABLE kt.channels (
 	id BIGINT PRIMARY KEY,
 	username VARCHAR(100),
 	title VARCHAR(255) NOT NULL,
-	join_request BOOLEAN,
 	participants_count BIGINT,
-	updated_on DATE,
 	type INT DEFAULT 0,
-	retries INT DEFAULT 0
+	retries INT DEFAULT 0,
+	status INT DEFAULT 0,
+	updated_on DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -70,6 +70,31 @@ CREATE TABLE kt.channel_messages (
 	views INT DEFAULT 0,
 	dt DATETIME,
 	PRIMARY KEY (channel_id, message_id)
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
+--------------------------------
+-- teachers
+--------------------------------
+DROP TABLE IF EXISTS kt.teachers;
+CREATE TABLE kt.teachers (
+	id BIGINT PRIMARY KEY,
+	channel_id BIGINT NOT NULL,
+	channel_username VARCHAR(100),
+	channel_title VARCHAR(255) NOT NULL,
+	name VARCHAR(100),
+	city VARCHAR(100),
+	districts VARCHAR(100),
+	age VARCHAR(100),
+	price VARCHAR(100),
+	height VARCHAR(100),
+	weight VARCHAR(100),
+	measurement VARCHAR(100),
+	service VARCHAR(255),
+	status INT DEFAULT 0,
+	updated_on DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

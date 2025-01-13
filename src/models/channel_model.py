@@ -23,16 +23,15 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_channel(self, id: int, username: str, title: str, join_request: bool,
-                    participants_count: int, updated_on: date):
+    def add_channel(self, id: int, username: str, title: str, participants_count: int, updated_on: date):
         """
         添加一个新的 channel 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, join_request, participants_count, updated_on)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO channels (id, username, title, participants_count, updated_on)
+        VALUES (%s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, join_request, participants_count, updated_on)
+        values = (id, username, title, participants_count, updated_on)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 
@@ -58,6 +57,7 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error retrieving all channels: {e}")
             return []
+        
     def get_channel_by_id(self, id):
         """Retrieve a channel by ID."""
         select_query = "SELECT * FROM channels WHERE id = %s;"
@@ -111,6 +111,18 @@ class ChannelModel:
             logger.error(f"Error checking if message exists in channel {channel_id},{message_id}: {e}")
             return False
 
+    def update_channel(self, channel_id: int, username: str, title: str,
+                       participants_count: int, updated_on: date):
+        """
+        更新指定频道
+        """
+        update_query = '''
+        UPDATE channels SET username = %s, title = %s, participants_count = %s, updated_on = %s WHERE id = %s;
+        '''
+        values = (username, title, participants_count, updated_on, channel_id)
+        return self._execute_query(update_query, values)
+
+        
     def update_channel_type(self, channel_id: int, type: int) -> bool:
         """
         更新指定频道的 type 字段
@@ -119,6 +131,16 @@ class ChannelModel:
         UPDATE channels SET type = %s WHERE id = %s;
         '''
         values = (type, channel_id)
+        return self._execute_query(update_query, values)
+    
+    def update_channel_status(self, channel_id: int, status: int) -> bool:
+        """
+        更新指定频道的 status 字段
+        """
+        update_query = '''
+        UPDATE channels SET status = %s WHERE id = %s;
+        '''
+        values = (status, channel_id)
         return self._execute_query(update_query, values)
     
     def increment_retries(self, channel_id: int) -> bool:

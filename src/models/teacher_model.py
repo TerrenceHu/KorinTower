@@ -23,22 +23,21 @@ class TeacherModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_teacher(self, id: int, username: str, title: str, join_request: bool,
-                    participants_count: int, updated_on: date):
+    def add_teacher(self, id: int, username: str, title: str, participants_count: int, updated_on: date):
         """
-        添加一个新的 channel 记录
+        添加一个新的 teacher 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, join_request, participants_count, updated_on)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO channels (id, username, title, participants_count, updated_on)
+        VALUES (%s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, join_request, participants_count, updated_on)
+        values = (id, username, title, participants_count, updated_on)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 
     def does_teacher_exist(self, id) -> bool:
         """
-        检查channel是否存在于 channels 表中
+        检查 teacher 是否存在于 teachers 表中
         """
         query = "SELECT EXISTS(SELECT 1 FROM channels WHERE id = %s LIMIT 1)"
         values = (id,)
@@ -53,6 +52,27 @@ class TeacherModel:
         values = (id,)
         result = self._fetch_one(select_query, values)
         return result
+
+    def update_teacher(self, channel_id: int, username: str, title: str,
+                       participants_count: int, updated_on: date):
+        """
+        更新指定频道
+        """
+        update_query = '''
+        UPDATE channels SET username = %s, title = %s, participants_count = %s, updated_on = %s WHERE id = %s;
+        '''
+        values = (username, title, participants_count, updated_on, channel_id)
+        return self._execute_query(update_query, values)
+
+    def update_teacher_status(self, channel_id: int, status: int) -> bool:
+        """
+        更新指定频道的 status 字段
+        """
+        update_query = '''
+        UPDATE channels SET status = %s WHERE id = %s;
+        '''
+        values = (status, channel_id)
+        return self._execute_query(update_query, values)
 
     def delete_teacher(self, id: int):
         """

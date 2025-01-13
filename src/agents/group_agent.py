@@ -57,7 +57,6 @@ class GroupAgent():
 
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
-        today_date = date.today()
         for group_item in self.group_model.get_all_groups():
             id, username = group_item[0], group_item[1]
             logger.info(f"get_group_members group: {id},{username}")
@@ -113,7 +112,6 @@ class GroupAgent():
 
     # 获取群组消息，从群组消息中获取group或channel
     def get_group_messages(self) -> None:
-        today_date = date.today()
         for id, name in self.group_model.get_all_groups():
             today = datetime(today_date.year, today_date.month, today_date.day, tzinfo=pytz.utc)
             yesterday_date = date.today() - timedelta(days=1)
@@ -171,7 +169,7 @@ class GroupAgent():
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
         else:
-            self.channel_model.add_channel(channel.id, channel.username, channel.title, channel.join_request,
+            self.channel_model.add_channel(channel.id, channel.username, channel.title,
                                            channel.participants_count, today_date)
             logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
             self.channel_agent.parse_channel(channel)

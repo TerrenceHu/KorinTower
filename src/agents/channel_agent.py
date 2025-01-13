@@ -4,7 +4,7 @@ from datetime import date
 from configparser import ConfigParser
 
 from telethon.sync import TelegramClient
-from telethon.tl.types import Channel, MessageMediaPhoto
+from telethon.tl.types import Channel, ChannelForbidden, MessageMediaPhoto
 
 from paddleocr import PaddleOCR
 from http import HTTPStatus
@@ -29,7 +29,7 @@ class ChannelAgent():
                                           password=self.db_password, database=self.db_database)
 
         self.media_path = config.get('APPLICATION', 'media_path')
-        self.ocr = PaddleOCR(lang='ch')
+        self.ocr = PaddleOCR(lang='ch', show_log=False)
 
         type_prompt_template_file = 'config/type_prompt_template.txt'
         try:
@@ -37,7 +37,46 @@ class ChannelAgent():
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {type_prompt_template_file}")
 
+        info_prompt_template_file = 'config/type_prompt_template.txt'
+        try:
+            self.type_prompt_template = read_prompt_template(type_prompt_template_file)
+        except FileNotFoundError as e:
+            logger.error(f"Prompt template file not found: {type_prompt_template_file}")
+
     def llm_judge_type(self, content: str) -> int:
+        # 读取prompt模板文件
+        system_prompt = self.type_prompt_template % (content)
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': ''}
+            ]
+        try:
+            response = dashscope.Generation.call(
+                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
+                model="qwen-plus",
+                messages=messages,
+                result_format='message',
+                temperature=0.1
+                )
+            print(content)
+            print(response)
+        except Exception as e:
+            logger.error(f"LLM parse type error for {content}: {e}")
+            return 0
+        if response.status_code != HTTPStatus.OK:
+            logger.error(f"LLM parse type error {response}")
+            return 0
+        
+        output = response.output.choices[0].message.content
+        if output.startswith('按摩师'):
+            return 1
+        elif output.startswith('导航'):
+            return 2
+        elif output.startswith('其他'):
+            return 100
+        return 0
+    
+    def llm_get_info(self, content: str) -> int:
         # 读取prompt模板文件
         system_prompt = self.type_prompt_template % (content)
         messages = [
@@ -122,84 +161,34 @@ class ChannelAgent():
 
         self.channel_model.increment_retries(channel.id)
         prompt_messages = []
-        content_len = 0
+        prompt_len = 0
         for message_text in pinned_messages:
-            if content_len >= 3000:
+            if prompt_len >= 3000:
                 break
             prompt_messages.append(message_text)
-            content_len += len(message_text)
+            prompt_len += len(message_text)
         for message_text in candidate_messages:
-            if content_len >= 3000:
+            if prompt_len >= 3000:
                 break
             # 太长的消息不加入prompt
             if len(message_text) > 1000:
                 continue
             prompt_messages.append(message_text)
-            content_len += len(message_text)
+            prompt_len += len(message_text)
 
-        content = ";".join(prompt_messages)
-        if content == "":
+        prompt_content = ";".join(prompt_messages)
+        if prompt_content == "":
             return
 
-        channel_type = self.llm_judge_type(content)
+        channel_type = self.llm_judge_type(prompt_content)
         if channel_type != 0:
             self.channel_model.update_channel_type(channel.id, channel_type)
         
         if channel_type == 1:
 
-        
 
-    def batch_parse_channel(self):
-        all_channels = self.channel_model.get_all_channels()
-        for channel in all_channels:
-            # 如果已经解析过，或者解析失败次数过多，跳过
-            if channel[6] != 0 or channel[7] > 3:
-                continue
-
-            self.channel_model.increment_retries(channel[0])
-            logger.info(f"parse channel: {channel[0]},{channel[1]},{channel[2]}")
-            messages = self.channel_model.get_channel_messages(channel[0])
-
-            # 为了控制prompt的token数，优先用pinned消息，再用其他消息
-            pinned_messages, candidate_messages, prompt_messages = [], [], []
-            for message in messages:
-                message_text, pinned = message[2:4]
-                if pinned:
-                    pinned_messages.append(message_text)
-                else:
-                    candidate_messages.append(message_text)
-
-            content_len = 0
-            for message_text in pinned_messages:
-                if content_len >= 3000:
-                    break
-                prompt_messages.append(message_text)
-                content_len += len(message_text)
-            for message_text in candidate_messages:
-                if content_len >= 3000:
-                    break
-                # 太长的消息不加入prompt
-                if len(message_text) > 1000:
-                    continue
-                prompt_messages.append(message_text)
-                content_len += len(message_text)
-
-            content = ";".join(prompt_messages)
-            if content == "":
-                continue
-
-            channel_type = self.llm_judge_type(content)
-            if channel_type != 0:
-                self.channel_model.update_channel_type(channel[0], channel_type)
-
-    def single_parse_channel(self, channel_id):
-        self.channel_model.increment_retries(channel_id)
-        try:
-            channel = self.client.get_entity(channel_id)
-        except Exception as e:
-            logger.error(f"Failed to get_entity for channel {channel_id}: {e}")
-            return
-        
+    def single_parse_channel(self, channel: Channel):
+        self.channel_model.increment_retries(channel.id)        
         logger.info(f"parse channel: {channel.id},{channel.username},{channel.title}")
         messages = self.channel_model.get_channel_messages(channel.id)
 
@@ -212,26 +201,60 @@ class ChannelAgent():
             else:
                 candidate_messages.append(message_text)
 
-        content_len = 0
+        prompt_len = 0
         for message_text in pinned_messages:
-            if content_len >= 3000:
+            if prompt_len >= 3000:
                 break
             prompt_messages.append(message_text)
-            content_len += len(message_text)
+            prompt_len += len(message_text)
         for message_text in candidate_messages:
-            if content_len >= 3000:
+            if prompt_len >= 3000:
                 break
             # 太长的消息不加入prompt
             if len(message_text) > 1000:
                 continue
             prompt_messages.append(message_text)
-            content_len += len(message_text)
+            prompt_len += len(message_text)
 
-        content = ";".join(prompt_messages)
-        if content == "":
+        prompt_content = ";".join(prompt_messages)
+        if prompt_content == "":
             return
     
-        channel_type = self.llm_judge_type(content)
+        channel_type = self.llm_judge_type(prompt_content)
         if channel_type != 0:
             self.channel_model.update_channel_type(channel.id, channel_type)
 
+    def batch_parse_channel(self):
+        all_channels = self.channel_model.get_all_channels()
+        for one_channel in all_channels:
+            # 过滤失效的channel
+            if one_channel[6] < 1:
+                continue
+            # 先尝试用id获取channel，如果失败再尝试用username
+            try:
+                channel = self.client.get_entity(one_channel[0])
+            except Exception as e:
+                logger.error(f"1st Failed to get channel {one_channel[0]},{one_channel[1]},{one_channel[2]}: {e}")
+                try:
+                    if one_channel[1] is not None:
+                        channel = self.client.get_entity(one_channel[1])
+                        if isinstance(channel, ChannelForbidden):
+                            logger.error(f"Channel {one_channel[0]},{one_channel[1]},{one_channel[2]} is forbidden")
+                            raise(e)
+                    else:
+                        raise(e)
+                except Exception as e:
+                    logger.error(f"Finally failed to get channel {one_channel[0]},{one_channel[1]},{one_channel[2]}: {e}")
+                    self.channel_model.update_channel_status(one_channel[0], -1)
+                    continue
+
+            # channel的username和title可能会变化，需要更新
+            if channel.username != one_channel[1] or channel.title != one_channel[2]:
+                self.channel_model.update_channel(channel.id, channel.username, channel.title,
+                                                  channel.participants_count, today_date)
+                logger.info(f"update channel {channel.id},{channel.username},{channel.title}")
+    
+            # 如果已经解析过，或者解析失败次数过多，跳过
+            if channel[6] != 0 or channel[7] > 3:
+                continue
+            self.single_parse_channel(channel)

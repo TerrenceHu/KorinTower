@@ -1,6 +1,6 @@
-import logging
 import pytz
 from configparser import ConfigParser
+from loguru import logger
 from datetime import date, datetime, timedelta
 
 from telethon.sync import TelegramClient
@@ -19,7 +19,6 @@ from agents.channel_agent import ChannelAgent
 from utils.chats import *
 
 
-logger = logging.getLogger(__name__)
 today_date = date.today()
 
 class GroupAgent():
@@ -47,10 +46,11 @@ class GroupAgent():
             if dialog.is_user:
                 logger.info(f"Ignore dialog as user: {dialog.name}")
                 continue
+            elif dialog.is_channel:
+                logger.info(f"Ignore dialog as channel: {dialog.name}")
+                continue
             elif dialog.is_group:
                 self.process_group(dialog.entity)
-            elif dialog.is_channel:
-                self.process_channel(dialog.entity)
 
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
@@ -58,7 +58,7 @@ class GroupAgent():
     # 获取群组成员，从群组成员的about中获取group或channel
     def get_group_members(self) -> None:
         for group_item in self.group_model.get_all_groups():
-            id, username = group_item[0], group_item[1]
+            id, username, title = group_item[0:3]
             logger.info(f"get_group_members group: {id},{username}")
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
             try:
@@ -108,7 +108,7 @@ class GroupAgent():
                 chat_names = find_channel(full_member.full_user.about)
                 if len(chat_names) < 1:
                     continue
-                self.process_chat_names(chat_names)
+                self.process_chat_names(chat_names, title)
 
     # 获取群组消息，从群组消息中获取group或channel
     def get_group_messages(self) -> None:
@@ -159,7 +159,7 @@ class GroupAgent():
                                        group.participants_count, today_date)
             logger.info(f"Add new group to db: {group.id},{group.username},{group.title}")
 
-    def process_channel(self, channel: Channel):
+    def process_channel(self, channel: Channel, group_title: str):
         logger.info(f"Processing channel: {channel.id},{channel.username},{channel.title}")
         # 过滤广告、已经抓取过的Channel
         if filter_entity_by_title(channel.title):
@@ -168,14 +168,18 @@ class GroupAgent():
         
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
+            channel_item = self.channel_model.get_channel(channel.id)
+            if channel_item[8].find(group_title) < 0:
+                new_from_groups = channel_item[8] + ";" + group_title
+                self.channel_model.update_channel_from_groups(channel.id, new_from_groups)
         else:
             self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                           channel.participants_count, today_date)
+                                           channel.participants_count, today_date, group_title)
             logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
-            self.channel_agent.parse_channel(channel)
+            self.channel_agent.parse_channel(channel, group_title)
 
-    def process_chat_names(self, chat_names: list) -> None:
-        logger.info(f"Processing chat names: {chat_names}")
+    def process_chat_names(self, chat_names: list, group_title: str) -> None:
+        logger.info(f"Processing chat names {chat_names} from group {group_title}")
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
@@ -208,7 +212,7 @@ class GroupAgent():
                 self.process_group(chat)
             # 如果是Channel
             else:
-                self.process_channel(chat)
+                self.process_channel(chat, group_title)
 
     # 加入 group
     def join_group(self, chat: Channel) -> bool:

@@ -1,4 +1,4 @@
-import logging
+from loguru import logger
 from configparser import ConfigParser
 
 from telethon.sync import TelegramClient
@@ -8,16 +8,12 @@ from agents.group_agent import GroupAgent
 from agents.channel_agent import ChannelAgent
 
 
-
-logging.basicConfig(
-    format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s",
-    level=logging.INFO,
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.FileHandler("kt.log")
-    ]
+logger.add(
+    "kt.log",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
+    encoding="utf-8"
 )
-logger = logging.getLogger(__name__)
 
 def main() -> None:
     # 读取配置
@@ -44,7 +40,7 @@ def main() -> None:
 
     group_agent = GroupAgent(client, config)
     # 获取群成员信息，存量，可以每个月一次
-    #group_agent.get_group_members()
+    group_agent.get_group_members()
     # 获取群消息，增量，每天一次
     #group_agent.get_group_messages()
 

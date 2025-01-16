@@ -29,8 +29,9 @@ def main() -> None:
             client.sign_in(password=input('Password: '))
 
     channel_agent = ChannelAgent(client, config)
-    channel = client.get_entity("lanxintian")
-    channel_agent.get_channel_messages(channel)
+    channel = client.get_entity(1635803135)
+    print(channel)
+    #channel_agent.get_channel_messages(channel)
 
     return
 

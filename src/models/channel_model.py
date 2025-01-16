@@ -23,15 +23,16 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_channel(self, id: int, username: str, title: str, participants_count: int, updated_on: date):
+    def add_channel(self, id: int, username: str, title: str, participants_count: int,
+                    updated_on: date, from_groups: str):
         """
         添加一个新的 channel 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, participants_count, updated_on)
-        VALUES (%s, %s, %s, %s, %s);
+        INSERT INTO channels (id, username, title, participants_count, updated_on, from_groups)
+        VALUES (%s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, participants_count, updated_on)
+        values = (id, username, title, participants_count, updated_on, from_groups)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 
@@ -141,6 +142,16 @@ class ChannelModel:
         UPDATE channels SET status = %s WHERE id = %s;
         '''
         values = (status, channel_id)
+        return self._execute_query(update_query, values)
+    
+    def update_channel_from_groups(self, channel_id: int, from_groups: str) -> bool:
+        """
+        更新指定频道的 from_groups 字段
+        """
+        update_query = '''
+        UPDATE channels SET from_groups = %s WHERE id = %s;
+        '''
+        values = (from_groups, channel_id)
         return self._execute_query(update_query, values)
     
     def increment_retries(self, channel_id: int) -> bool:

@@ -52,7 +52,8 @@ CREATE TABLE kt.channels (
 	type INT DEFAULT 0,
 	retries INT DEFAULT 0,
 	status INT DEFAULT 0,
-	updated_on DATE
+	updated_on DATE,
+	from_groups TEXT
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

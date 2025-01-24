@@ -70,14 +70,11 @@ class GroupModel:
         """
         将用户添加到群组中
         """
-        if self.is_user_in_group(group_id, user_id):
-            return
-
-        insert_query = '''
+        query = '''
         INSERT INTO group_members (group_id, user_id, updated_on) VALUES (%s, %s, %s);
         '''
         try:
-            self.cursor.execute(insert_query, (group_id, user_id, updated_on))
+            self.cursor.execute(query, (group_id, user_id, updated_on))
             self.connection.commit()
         except Error as e:
             logger.error(f"Error adding user to group: {e} {group_id} {user_id}")
@@ -96,6 +93,27 @@ class GroupModel:
         except Error as e:
             logger.error(f"Error checking if user exists in group {group_id},{user_id}: {e}")
             return False
+
+    def update_group_city(self, group_id: int, city: str):
+        """
+        更新群组的 city 字段
+        """
+        query = '''
+        UPDATE `groups` SET city = %s WHERE id = %s;
+        '''
+        values = (city, group_id)
+        if not self._execute_query(query, values):
+            logger.error(f"Error updating group city for group {group_id}")
+    
+    def update_group_status(self, group_id: int, status: int) -> bool:
+        """
+        更新群组的 status 字段
+        """
+        update_query = '''
+        UPDATE `groups` SET status = %s WHERE id = %s;
+        '''
+        values = (status, group_id)
+        return self._execute_query(update_query, values)
 
     def delete_group(self, id: int):
         """

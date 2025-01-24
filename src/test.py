@@ -2,6 +2,7 @@ from configparser import ConfigParser
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
+from agents.group_agent import GroupAgent
 from agents.channel_agent import ChannelAgent
 
 
@@ -28,8 +29,10 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    channel_agent = ChannelAgent(client, config)
-    channel = client.get_entity(1635803135)
+    #channel_agent = ChannelAgent(client, config)
+    #channel = client.get_entity("SZshareGF")
+
+    group_agent = GroupAgent(client, config)
     print(channel)
     #channel_agent.get_channel_messages(channel)
 

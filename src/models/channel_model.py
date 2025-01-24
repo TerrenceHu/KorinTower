@@ -1,10 +1,8 @@
-import logging
+from loguru import logger
 from datetime import date, datetime
 
 import mysql.connector
 from mysql.connector import Error
-
-logger = logging.getLogger(__name__)
 
 class ChannelModel:
     def __init__(self, host, user, password, database):

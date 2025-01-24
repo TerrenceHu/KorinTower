@@ -22,7 +22,7 @@ def filter_group_by_title(name: str) -> bool:
     return False
 
 # 过滤掉一些非老师的群成员
-def filter_entity_by_title(name: str) -> bool:    
+def filter_entity_by_title(name: str) -> bool:
     key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", 
                  u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
                  u"广告", u"软件", u"接码", u"老店", u"机器人", u"号商", u"项目", u"公群",

@@ -2,24 +2,26 @@ import pytz
 from configparser import ConfigParser
 from loguru import logger
 from datetime import date, datetime, timedelta
+import jieba
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import User, Channel
+from telethon.tl.types import User, Channel, ChannelForbidden
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
-from telethon import utils
 
 from models.group_model import GroupModel
 from models.channel_model import ChannelModel
 from models.user_model import UserModel
+from models.district_model import DistrictModel
 
 from agents.channel_agent import ChannelAgent
 from utils.chats import *
 
 
 today_date = date.today()
+jieba.load_userdict('data/userdict.txt')
 
 class GroupAgent():
     def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
@@ -37,127 +39,127 @@ class GroupAgent():
                                       password=self.db_password, database=self.db_database)
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
+        self.district_model = DistrictModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
 
         self.channel_agent = ChannelAgent(client, config)
+
+        # 获取所有城市
+        self.all_cities = {}
+        for city in self.district_model.get_all_cities():
+            city_id = city[0]
+            city_name = city[1].rstrip("市")
+            self.all_cities[city_name] = {}
+            for district in self.district_model.get_districts_of_city(city_id):
+                district_name = district[1]
+                self.all_cities[city_name][district_name] = 0
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
             logger.info(f"Get dialog: {dialog.name}")
-            if dialog.is_user:
+            if dialog.is_group:
+                self.process_group(dialog.entity)
+            elif dialog.is_user:
                 logger.info(f"Ignore dialog as user: {dialog.name}")
-                continue
             elif dialog.is_channel:
                 logger.info(f"Ignore dialog as channel: {dialog.name}")
-                continue
-            elif dialog.is_group:
-                self.process_group(dialog.entity)
 
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
 
-    # 获取群组成员，从群组成员的about中获取group或channel
-    def get_group_members(self) -> None:
-        for group_item in self.group_model.get_all_groups():
-            id, username, title = group_item[0:3]
-            logger.info(f"get_group_members group: {id},{username}")
-            # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
-            try:
-                # TODO: 
-                # 1. 这里不知道为什么，先get_entity可以减少get_participants失败的情况
-                # 2. 需要记录获取成员失败的群，后续二次处理
-                if username:
-                    group = self.client.get_entity(username)
-                members = self.client.get_participants(id, aggressive=True)
-            except Exception as e:
-                logger.error(f"Failed to get participants of group {id},{username}: {e}")
-                continue
-
-            for member in members:
-                # 过滤bot、广告号、已经爬过的用户，减少TG请求
-                # TODO: 可能用户信息会更新，需要重新爬取
-                if member.bot:
-                    continue
-                if filter_entity_by_title(member.first_name) or filter_entity_by_title(member.last_name):
-                    continue
-                if member.first_name == "" and member.last_name == "" and member.username == "":
-                    continue
-                if self.user_model.does_user_exist(member.id):
-                    continue
-
-                # 获取用户的info
-                try:
-                    full_member = self.client(GetFullUserRequest(member))
-                except Exception as e:
-                    logger.error(f"Failed to GetFullUserRequest {member.id},{member.username}: {e}")
-                    continue
-
-                about = full_member.full_user.about
-                if about:
-                    about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-
-                if not self.user_model.does_user_exist(member.id):
-                    self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
-                    logger.info(f"Add new user to db: {member.id},{member.username}")
-                self.group_model.add_user_to_group(id, member.id, today_date)
-
-                # 根据info再次过滤广告号，广告号没有价值且处理麻烦
-                if filter_entity_by_info(about):
-                    continue
-
-                # 从info中获取新的群组或频道
-                chat_names = find_channel(full_member.full_user.about)
-                if len(chat_names) < 1:
-                    continue
-                self.process_chat_names(chat_names, title)
-
-    # 获取群组消息，从群组消息中获取group或channel
-    def get_group_messages(self) -> None:
-        for id, name in self.group_model.get_all_groups():
-            today = datetime(today_date.year, today_date.month, today_date.day, tzinfo=pytz.utc)
-            yesterday_date = date.today() - timedelta(days=1)
-            yesterday = datetime(yesterday_date.year, yesterday_date.month, yesterday_date.day, tzinfo=pytz.utc)
-
-            # offset_date is used to get messages prior to that date
-            messages = self.client.iter_messages(id, offset_date=today)
-
-            '''
-            # TODO:写入文件或者数据库
-            f = open("data/%s.%s.messages" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(["date", "sender", "message"])
-
-            for message in messages:
-                if message.date <= yesterday:
-                    break
-                csv_writer.writerow([str(message.date),
-                                    str(utils.get_display_name(message.sender)),
-                                    str(message.message).replace('\r', '').replace('\n', '').replace('\t', '')]
-                                    )
-            else:
-                f.close()
-            '''
-
     def process_group(self, group: Channel):
-        logger.info(f"Processing group: {group.id},{group.username},{group.title}")
+        logger.info(f"Processing group {group.id},{group.username},{group.title}")
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群
-        try:
-            if group.participants_count != None and group.participants_count < 1000:
-                logger.info(f"Too few members in group: {group.id},{group.username},{group.title}")
-                return
-            if filter_group_by_title(group.title):
-                logger.info(f"Filter ad group: {group.id},{group.username},{group.title}")
-                return
-        except Exception as e:
-            logger.error(f"Failed to filter group: {group.id}: {e}")
+        if group.participants_count != None and group.participants_count < 1000:
+            logger.info(f"Too few members in group {group.id},{group.username},{group.title}")
             return
-        
+        if filter_group_by_title(group.title):
+            logger.info(f"Filter ad group {group.id},{group.username},{group.title}")
+            return
+
         if self.group_model.does_group_exist(group.id):
-            logger.info(f"Already added group: {group.id},{group.username},{group.title}")
+            logger.info(f"Already added group {group.id},{group.username},{group.title}")
         else:
             self.group_model.add_group(group.id, group.username, group.title, group.join_request,
                                        group.participants_count, today_date)
-            logger.info(f"Add new group to db: {group.id},{group.username},{group.title}")
+            logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
+
+        group_city = None
+        # 如果群组名里有城市，就直接判断群组归属的城市
+        title_tokens = list(jieba.cut(group.title))
+        for token in title_tokens:
+            for city_name in self.all_cities.keys():
+                if token in city_name:
+                    group_city = city_name
+        logger.info(f"Group {group.id},{group.username},{group.title} in city {group_city} by title")
+
+        # 如果群组名里没有城市，就根据群成员的城市或辖区来判断
+        if group_city == None:
+            try:
+                members = self.client.get_participants(group.id, aggressive=True)
+            except Exception as e:
+                logger.error(f"Failed to get participants of group {group.id},{group.username},{group.title}: {e}")
+                return
+
+            district_counts = {}
+            for city_name in self.all_cities.keys():
+                district_counts[city_name] = 0
+            for member in members:
+                if member.first_name:
+                    first_name_tokens = [token for token in list(jieba.cut(member.first_name)) if token.strip() != ""]
+                    for token in first_name_tokens:
+                        for city_name in self.all_cities.keys():
+                            if token == city_name:
+                                district_counts[city_name] += 1
+                            for district_name in self.all_cities[city_name]:
+                                if token == district_name:
+                                    district_counts[city_name] += 1
+                if member.last_name:
+                    last_name_tokens = [token for token in list(jieba.cut(member.last_name)) if token.strip() != ""]
+                    for token in last_name_tokens:
+                        for city_name in self.all_cities.keys():
+                            if token == city_name:
+                                district_counts[city_name] += 1
+                            for district_name in self.all_cities[city_name]:
+                                if token == district_name:
+                                    district_counts[city_name] += 1
+            max_city = max(district_counts, key=district_counts.get)
+            max_count = district_counts[max_city]
+            if max_count > 0:
+                group_city = max_city
+                logger.info(f"Group {group.id},{group.username},{group.title} in city {max_city} by members")
+        
+        # 如果根据群成员无法判断，就获取群消息来判断
+        if group_city == None:
+            try:
+                messages = self.client.get_messages(group.id, limit=200)
+            except Exception as e:
+                logger.error(f"Failed to get messages of group {group.id},{group.username},{group.title}: {e}")
+                return
+            district_counts = {}
+            for city_name in self.all_cities.keys():
+                district_counts[city_name] = 0
+            for message in messages:
+                if not message.message:
+                    continue
+                message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+                message_tokens = [token for token in list(jieba.cut(message_text)) if token.strip() != ""]
+                for token in message_tokens:
+                    for city_name in self.all_cities.keys():
+                        if token == city_name:
+                            district_counts[city_name] += 1
+                        for district_name in self.all_cities[city_name]:
+                            if token == district_name:
+                                district_counts[city_name] += 1
+            max_city = max(district_counts, key=district_counts.get)
+            max_count = district_counts[max_city]
+            if max_count > 0:
+                group_city = max_city
+                logger.info(f"Group {group.id},{group.username},{group.title} in city {max_city} by messages")
+        
+        if group_city:
+            self.group_model.update_group_city(group.id, group_city)
 
     def process_channel(self, channel: Channel, group_title: str):
         logger.info(f"Processing channel: {channel.id},{channel.username},{channel.title}")
@@ -165,7 +167,7 @@ class GroupAgent():
         if filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel: {channel.id},{channel.username},{channel.title}")
             return
-        
+
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
             channel_item = self.channel_model.get_channel(channel.id)
@@ -213,6 +215,108 @@ class GroupAgent():
             # 如果是Channel
             else:
                 self.process_channel(chat, group_title)
+
+    # 获取群组成员，从群组成员的about中获取group或channel
+    def get_group_members(self) -> None:
+        for group_item in self.group_model.get_all_groups():
+            id, username, title = group_item[0:3]
+            logger.info(f"Get members for group {id},{username},{title}")
+            # TODO: 这里不知道为什么，先get_entity可以减少get_participants失败的情况
+            try:
+                group = self.client.get_entity(id)
+            except Exception as e:
+                logger.error(f"Failed to get group {id},{username},{title} by id: {e}")
+                try:
+                    if username is not None:
+                        group = self.client.get_entity(username)
+                        if isinstance(group, ChannelForbidden):
+                            logger.error(f"Group {id},{username},{title} is forbidden")
+                            raise(e)
+                    else:
+                        raise(e)
+                except Exception as e:
+                    logger.error(f"Failed to get group {id},{username},{title} by username: {e}")
+                    self.group_model.update_group_status(id, -1)
+                    continue
+
+            self.process_group(group)
+            continue
+
+            # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
+            # TODO: 需要记录获取成员失败的群，后续二次处理
+            try:
+                members = self.client.get_participants(id, aggressive=True)
+            except Exception as e:
+                logger.error(f"Failed to get participants of group {id},{username},{title}: {e}")
+                continue
+
+            for member in members:
+                # 过滤bot、广告号、已经爬过的用户，减少TG请求
+                # TODO: 可能用户信息会更新，需要重新爬取
+                if member.bot:
+                    continue
+                if filter_entity_by_title(member.first_name) or filter_entity_by_title(member.last_name):
+                    logger.info(f"filter member {member.first_name},{member.last_name} for group {id},{username},{title}")
+                    continue
+                if member.first_name == "" and member.last_name == "" and member.username == "":
+                    continue
+                if self.user_model.does_user_exist(member.id):
+                    continue
+
+                # 获取用户的info
+                try:
+                    full_member = self.client(GetFullUserRequest(member))
+                except Exception as e:
+                    logger.error(f"Failed to GetFullUserRequest {member.id},{member.username}: {e}")
+                    continue
+
+                about = full_member.full_user.about
+                if about:
+                    about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+
+                if not self.user_model.does_user_exist(member.id):
+                    self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
+                    logger.info(f"Add new user {member.id},{member.username} to db")
+                if not self.user_model.is_user_in_group(id, member.id):
+                    self.group_model.add_user_to_group(id, member.id, today_date)
+                    logger.info(f"Add new user {member.id},{member.username} to group {id},{username},{title}")
+
+                # 根据info再次过滤广告号，广告号没有价值且处理麻烦
+                if filter_entity_by_info(about):
+                    continue
+
+                # 从info中获取新的群组或频道
+                chat_names = find_channel(about)
+                if len(chat_names) < 1:
+                    continue
+                self.process_chat_names(chat_names, title)
+
+    # 获取群组消息，从群组消息中获取group或channel
+    def get_group_messages(self) -> None:
+        for id, name in self.group_model.get_all_groups():
+            today = datetime(today_date.year, today_date.month, today_date.day, tzinfo=pytz.utc)
+            yesterday_date = date.today() - timedelta(days=1)
+            yesterday = datetime(yesterday_date.year, yesterday_date.month, yesterday_date.day, tzinfo=pytz.utc)
+
+            # offset_date is used to get messages prior to that date
+            messages = self.client.iter_messages(id, offset_date=today)
+
+            '''
+            # TODO:写入文件或者数据库
+            f = open("data/%s.%s.messages" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
+            csv_writer = csv.writer(f)
+            csv_writer.writerow(["date", "sender", "message"])
+
+            for message in messages:
+                if message.date <= yesterday:
+                    break
+                csv_writer.writerow([str(message.date),
+                                    str(utils.get_display_name(message.sender)),
+                                    str(message.message).replace('\r', '').replace('\n', '').replace('\t', '')]
+                                    )
+            else:
+                f.close()
+            '''
 
     # 加入 group
     def join_group(self, chat: Channel) -> bool:

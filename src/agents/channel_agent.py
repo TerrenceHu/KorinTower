@@ -42,70 +42,6 @@ class ChannelAgent():
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
-    # LLM判断channel类型：0-无法判断，1-按摩师，2-导航，100-其他
-    def llm_judge_type(self, content: str) -> int:
-        # 读取prompt模板文件
-        system_prompt = self.type_prompt_template % (content)
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': ''}
-            ]
-        try:
-            response = dashscope.Generation.call(
-                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
-                model="qwen-plus",
-                messages=messages,
-                result_format='message',
-                temperature=0.1
-                )
-            print(content)
-            print(response)
-        except Exception as e:
-            logger.error(f"LLM parse type error for {content}: {e}")
-            return 0
-        if response.status_code != HTTPStatus.OK:
-            logger.error(f"LLM parse type error {response}")
-            return 0
-        
-        output = response.output.choices[0].message.content
-        if output.startswith('按摩师'):
-            return 1
-        elif output.startswith('导航'):
-            return 2
-        elif output.startswith('其他'):
-            return 100
-        return 0
-    
-    # LLM获取channel信息
-    def llm_get_info(self, title: str, content: str, group_title: str) -> int:
-        # 读取prompt模板文件
-        system_prompt = self.info_prompt_template % (group_title, title, content)
-        messages = [
-            {'role': 'system', 'content': system_prompt},
-            {'role': 'user', 'content': ''}
-            ]
-        try:
-            response = dashscope.Generation.call(
-                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
-                model="qwen-plus",
-                messages=messages,
-                result_format='message',
-                temperature=0.1
-                )
-            print(content)
-            print(response)
-        except Exception as e:
-            logger.error(f"LLM get info error for {content}: {e}")
-            return 0
-        if response.status_code != HTTPStatus.OK:
-            logger.error(f"LLM get info error {response}")
-            return 0
-        
-        output = response.output.choices[0].message.content
-
-        return 0
-
-
     # 抓取Channel消息，并调用LLM判断channel类型
     def parse_channel(self, channel: Channel, group_title: str):
         # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
@@ -237,7 +173,7 @@ class ChannelAgent():
             try:
                 channel = self.client.get_entity(channel_item[0])
             except Exception as e:
-                logger.error(f"1st Failed to get channel {channel_item[0]},{channel_item[1]},{channel_item[2]}: {e}")
+                logger.error(f"Failed to get channel {channel_item[0]},{channel_item[1]},{channel_item[2]} by id: {e}")
                 try:
                     if channel_item[1] is not None:
                         channel = self.client.get_entity(channel_item[1])
@@ -258,3 +194,66 @@ class ChannelAgent():
                 logger.info(f"update channel {channel.id},{channel.username},{channel.title}")
 
             self.single_parse_channel(channel, channel_item)
+
+    # LLM判断channel类型：0-无法判断，1-按摩师，2-导航，100-其他
+    def llm_judge_type(self, content: str) -> int:
+        # 读取prompt模板文件
+        system_prompt = self.type_prompt_template % (content)
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': ''}
+            ]
+        try:
+            response = dashscope.Generation.call(
+                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
+                model="qwen-plus",
+                messages=messages,
+                result_format='message',
+                temperature=0.1
+                )
+            print(content)
+            print(response)
+        except Exception as e:
+            logger.error(f"LLM parse type error for {content}: {e}")
+            return 0
+        if response.status_code != HTTPStatus.OK:
+            logger.error(f"LLM parse type error {response}")
+            return 0
+        
+        output = response.output.choices[0].message.content
+        if output.startswith('按摩师'):
+            return 1
+        elif output.startswith('导航'):
+            return 2
+        elif output.startswith('其他'):
+            return 100
+        return 0
+    
+    # LLM获取channel信息
+    def llm_get_info(self, title: str, content: str, group_title: str) -> int:
+        # 读取prompt模板文件
+        system_prompt = self.info_prompt_template % (group_title, title, content)
+        messages = [
+            {'role': 'system', 'content': system_prompt},
+            {'role': 'user', 'content': ''}
+            ]
+        try:
+            response = dashscope.Generation.call(
+                api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
+                model="qwen-plus",
+                messages=messages,
+                result_format='message',
+                temperature=0.1
+                )
+            print(content)
+            print(response)
+        except Exception as e:
+            logger.error(f"LLM get info error for {content}: {e}")
+            return 0
+        if response.status_code != HTTPStatus.OK:
+            logger.error(f"LLM get info error {response}")
+            return 0
+        
+        output = response.output.choices[0].message.content
+
+        return 0

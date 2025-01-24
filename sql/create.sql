@@ -23,6 +23,8 @@ CREATE TABLE kt.groups (
 	title VARCHAR(255),
 	join_request BOOLEAN,
 	participants_count BIGINT,
+	city VARCHAR(100) DEFAULT NULL,
+	status INT DEFAULT 0,
 	updated_on DATE
 )
 ENGINE=InnoDB
@@ -104,7 +106,6 @@ COLLATE=utf8mb4_general_ci;
 --------------------------------
 -- districts
 --------------------------------
-
 DROP TABLE IF EXISTS kt.districts;  
 CREATE TABLE kt.districts (  
   id BIGINT PRIMARY KEY,
@@ -114,7 +115,6 @@ CREATE TABLE kt.districts (
 ) ENGINE=INNODB DEFAULT CHARSET=utf8;
 
 INSERT INTO kt.districts VALUES (0, '中国', NULL);
-
 INSERT INTO kt.districts VALUES (100000, '北京市', 0);
 INSERT INTO kt.districts VALUES (200000, '上海市', 0);
 INSERT INTO kt.districts VALUES (300000, '天津市', 0);
@@ -153,29 +153,61 @@ INSERT INTO kt.districts VALUES (361000, '厦门市', 0);
 INSERT INTO kt.districts VALUES (572000, '三亚市', 0);
 
 -- INSERT INTO kt.districts VALUES (100000, '北京市', 0);
-INSERT INTO kt.districts VALUES (100010, '东城区', 100000);
-INSERT INTO kt.districts VALUES (100032, '西城区', 100000);
-INSERT INTO kt.districts VALUES (100071, '丰台区', 100000);
-INSERT INTO kt.districts VALUES (100020, '朝阳区', 100000);
-INSERT INTO kt.districts VALUES (100043, '石景山区', 100000);
-INSERT INTO kt.districts VALUES (100089, '海淀区', 100000);
-INSERT INTO kt.districts VALUES (102300, '门头沟区', 100000);
-INSERT INTO kt.districts VALUES (102400, '房山区', 100000);
-INSERT INTO kt.districts VALUES (101100, '通州区', 100000);
-INSERT INTO kt.districts VALUES (101300, '顺义区', 100000);
-INSERT INTO kt.districts VALUES (102200, '昌平区', 100000);
-INSERT INTO kt.districts VALUES (102600, '大兴区', 100000);
-INSERT INTO kt.districts VALUES (101400, '怀柔区', 100000);
-INSERT INTO kt.districts VALUES (101200, '平谷区', 100000);
-INSERT INTO kt.districts VALUES (101500, '密云区', 100000);
-INSERT INTO kt.districts VALUES (102100, '延庆区', 100000);
+INSERT INTO kt.districts VALUES (100010, '东城', 100000);
+INSERT INTO kt.districts VALUES (100032, '西城', 100000);
+INSERT INTO kt.districts VALUES (100071, '丰台', 100000);
+INSERT INTO kt.districts VALUES (100020, '朝阳', 100000);
+INSERT INTO kt.districts VALUES (100043, '石景山', 100000);
+INSERT INTO kt.districts VALUES (100089, '海淀', 100000);
+INSERT INTO kt.districts VALUES (102300, '门头沟', 100000);
+INSERT INTO kt.districts VALUES (102400, '房山', 100000);
+INSERT INTO kt.districts VALUES (101100, '通州', 100000);
+INSERT INTO kt.districts VALUES (101300, '顺义', 100000);
+INSERT INTO kt.districts VALUES (102200, '昌平', 100000);
+INSERT INTO kt.districts VALUES (102600, '大兴', 100000);
+INSERT INTO kt.districts VALUES (101400, '怀柔', 100000);
+INSERT INTO kt.districts VALUES (101200, '平谷', 100000);
+INSERT INTO kt.districts VALUES (101500, '密云', 100000);
+INSERT INTO kt.districts VALUES (102100, '延庆', 100000);
+
+-- INSERT INTO kt.districts VALUES (200000, '上海市', 0);
+INSERT INTO kt.districts VALUES (200001, '黄浦', 200000);
+INSERT INTO kt.districts VALUES (200002, '徐汇', 200000);
+INSERT INTO kt.districts VALUES (200003, '长宁', 200000);
+INSERT INTO kt.districts VALUES (200004, '静安', 200000);
+INSERT INTO kt.districts VALUES (200005, '普陀', 200000);
+INSERT INTO kt.districts VALUES (200006, '虹口', 200000);
+INSERT INTO kt.districts VALUES (200007, '杨浦', 200000);
+INSERT INTO kt.districts VALUES (200008, '闵行', 200000);
+INSERT INTO kt.districts VALUES (200009, '宝山', 200000);
+INSERT INTO kt.districts VALUES (200010, '嘉定', 200000);
+INSERT INTO kt.districts VALUES (200011, '浦东', 200000);
+INSERT INTO kt.districts VALUES (200012, '金山', 200000);
+INSERT INTO kt.districts VALUES (200013, '松江', 200000);
+INSERT INTO kt.districts VALUES (200014, '青浦', 200000);
+INSERT INTO kt.districts VALUES (200015, '奉贤', 200000);
+INSERT INTO kt.districts VALUES (200016, '崇明', 200000);
+
+-- INSERT INTO kt.districts VALUES (510000, '广州市', 0);
+INSERT INTO kt.districts VALUES (510001, '越秀', 510000);
+INSERT INTO kt.districts VALUES (510002, '荔湾', 510000);
+INSERT INTO kt.districts VALUES (510003, '海珠', 510000);
+INSERT INTO kt.districts VALUES (510004, '天河', 510000);
+INSERT INTO kt.districts VALUES (510005, '白云', 510000);
+INSERT INTO kt.districts VALUES (510006, '黄埔', 510000);
+INSERT INTO kt.districts VALUES (510007, '番禺', 510000);
+INSERT INTO kt.districts VALUES (510008, '花都', 510000);
+INSERT INTO kt.districts VALUES (510009, '南沙', 510000);
+INSERT INTO kt.districts VALUES (510010, '从化', 510000);
+INSERT INTO kt.districts VALUES (510011, '增城', 510000);
 
 -- INSERT INTO kt.districts VALUES (518000, '深圳市', 0);
-INSERT INTO kt.districts VALUES (518001, '福田区', 518000);
-INSERT INTO kt.districts VALUES (518002, '罗湖区', 518000);
-INSERT INTO kt.districts VALUES (518003, '南山区', 518000);
-INSERT INTO kt.districts VALUES (518004, '宝安区', 518000);
-INSERT INTO kt.districts VALUES (518005, '龙岗区', 518000);
-INSERT INTO kt.districts VALUES (518006, '坪山区', 518000);
-INSERT INTO kt.districts VALUES (518007, '龙华区', 518000);
-INSERT INTO kt.districts VALUES (518008, '盐田区', 518000);
+INSERT INTO kt.districts VALUES (518001, '福田', 518000);
+INSERT INTO kt.districts VALUES (518002, '罗湖', 518000);
+INSERT INTO kt.districts VALUES (518003, '南山', 518000);
+INSERT INTO kt.districts VALUES (518004, '宝安', 518000);
+INSERT INTO kt.districts VALUES (518005, '龙岗', 518000);
+INSERT INTO kt.districts VALUES (518006, '坪山', 518000);
+INSERT INTO kt.districts VALUES (518007, '龙华', 518000);
+INSERT INTO kt.districts VALUES (518008, '光明', 518000);
+INSERT INTO kt.districts VALUES (518009, '盐田', 518000);

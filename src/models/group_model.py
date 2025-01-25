@@ -23,16 +23,15 @@ class GroupModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_group(self, id: int, username: str, title: str, join_request: bool,
-                  participants_count: int, updated_on: date):
+    def add_group(self, id: int, username: str, title: str, participants_count: int, updated_on: date):
         """
         添加一个新的群组记录
         """
         query = '''
-        INSERT INTO `groups` (id, username, title, join_request, participants_count, updated_on)
-        VALUES (%s, %s, %s, %s, %s, %s);
+        INSERT INTO `groups` (id, username, title, participants_count, updated_on)
+        VALUES (%s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, join_request, participants_count, updated_on)
+        values = (id, username, title, participants_count, updated_on)
         if not self._execute_query(query, values):
             logger.error(f"Error adding group {id},{username}")
 
@@ -94,6 +93,17 @@ class GroupModel:
             logger.error(f"Error checking if user exists in group {group_id},{user_id}: {e}")
             return False
 
+    def update_group(self, group_id: int, username: str, title: str,
+                       participants_count: int, updated_on: date):
+        """
+        更新群组
+        """
+        update_query = '''
+        UPDATE `groups` SET username = %s, title = %s, participants_count = %s, updated_on = %s WHERE id = %s;
+        '''
+        values = (username, title, participants_count, updated_on, group_id)
+        return self._execute_query(update_query, values)
+    
     def update_group_city(self, group_id: int, city: str):
         """
         更新群组的 city 字段

@@ -21,7 +21,6 @@ CREATE TABLE kt.groups (
 	id BIGINT PRIMARY KEY,
 	username VARCHAR(100),
 	title VARCHAR(255),
-	join_request BOOLEAN,
 	participants_count BIGINT,
 	city VARCHAR(100) DEFAULT NULL,
 	status INT DEFAULT 0,

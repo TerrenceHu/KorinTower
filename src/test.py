@@ -1,10 +1,19 @@
 from configparser import ConfigParser
+from loguru import logger
+
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
 from agents.group_agent import GroupAgent
 from agents.channel_agent import ChannelAgent
 
+
+logger.add(
+    "kt.log",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
+    encoding="utf-8"
+)
 
 def main() -> None:
     # 读取配置
@@ -33,7 +42,9 @@ def main() -> None:
     #channel = client.get_entity("SZshareGF")
 
     group_agent = GroupAgent(client, config)
-    print(channel)
+    group = client.get_entity(2470910904)
+    print(group)
+    group_agent.process_group(group)
     #channel_agent.get_channel_messages(channel)
 
     return

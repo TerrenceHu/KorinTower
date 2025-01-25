@@ -54,6 +54,7 @@ class GroupAgent():
                 district_name = district[1]
                 self.all_cities[city_name][district_name] = 0
 
+        '''
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
             logger.info(f"Get dialog: {dialog.name}")
@@ -66,6 +67,28 @@ class GroupAgent():
 
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
+        '''
+
+    def get_city_from_text(self, text, threshold=3) -> str:
+        district_counts = {}
+        for city_name in self.all_cities.keys():
+            district_counts[city_name] = 0
+
+        tokens = [token for token in list(jieba.cut(text)) if token.strip() != ""]
+        for token in tokens:
+            for city_name in self.all_cities.keys():
+                if token == city_name:
+                    district_counts[city_name] += 1
+                for district_name in self.all_cities[city_name]:
+                    if token == district_name:
+                        district_counts[city_name] += 1
+
+        max_city = max(district_counts, key=district_counts.get)
+        max_count = district_counts[max_city]
+        print(district_counts)
+        if max_count >= threshold:
+            return max_city
+        return None
 
     def process_group(self, group: Channel):
         logger.info(f"Processing group {group.id},{group.username},{group.title}")
@@ -81,87 +104,52 @@ class GroupAgent():
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group {group.id},{group.username},{group.title}")
         else:
-            self.group_model.add_group(group.id, group.username, group.title, group.join_request,
-                                       group.participants_count, today_date)
+            self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
             logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
 
         group_city = None
-        # 如果群组名里有城市，就直接判断群组归属的城市
-        title_tokens = list(jieba.cut(group.title))
-        for token in title_tokens:
-            for city_name in self.all_cities.keys():
-                if token in city_name:
-                    group_city = city_name
-        logger.info(f"Group {group.id},{group.username},{group.title} in city {group_city} by title")
-
-        # 如果群组名里没有城市，就根据群成员的城市或辖区来判断
-        if group_city == None:
-            try:
-                members = self.client.get_participants(group.id, aggressive=True)
-            except Exception as e:
-                logger.error(f"Failed to get participants of group {group.id},{group.username},{group.title}: {e}")
-                return
-
-            district_counts = {}
-            for city_name in self.all_cities.keys():
-                district_counts[city_name] = 0
+        # 根据群成员的城市或辖区来判断群组归属的城市
+        try:
+            members = self.client.get_participants(group.id, aggressive=True)
+        except Exception as e:
+            logger.error(f"Failed to get participants of group {group.id},{group.username},{group.title}: {e}")
+        else:
+            member_names = []
             for member in members:
-                if member.first_name:
-                    first_name_tokens = [token for token in list(jieba.cut(member.first_name)) if token.strip() != ""]
-                    for token in first_name_tokens:
-                        for city_name in self.all_cities.keys():
-                            if token == city_name:
-                                district_counts[city_name] += 1
-                            for district_name in self.all_cities[city_name]:
-                                if token == district_name:
-                                    district_counts[city_name] += 1
-                if member.last_name:
-                    last_name_tokens = [token for token in list(jieba.cut(member.last_name)) if token.strip() != ""]
-                    for token in last_name_tokens:
-                        for city_name in self.all_cities.keys():
-                            if token == city_name:
-                                district_counts[city_name] += 1
-                            for district_name in self.all_cities[city_name]:
-                                if token == district_name:
-                                    district_counts[city_name] += 1
-            max_city = max(district_counts, key=district_counts.get)
-            max_count = district_counts[max_city]
-            if max_count > 0:
-                group_city = max_city
-                logger.info(f"Group {group.id},{group.username},{group.title} in city {max_city} by members")
-        
+                member_names.append(member.first_name)
+                member_names.append(member.last_name)
+            member_city = self.get_city_from_text(' ' . join([ name for name in member_names if name ]))
+            if member_city:
+                group_city = member_city
+                logger.info(f"Group {group.id},{group.username},{group.title} in city {member_city} by members")
+
         # 如果根据群成员无法判断，就获取群消息来判断
         if group_city == None:
             try:
-                messages = self.client.get_messages(group.id, limit=200)
+                messages = self.client.get_messages(group.id, limit=500)
             except Exception as e:
                 logger.error(f"Failed to get messages of group {group.id},{group.username},{group.title}: {e}")
-                return
-            district_counts = {}
-            for city_name in self.all_cities.keys():
-                district_counts[city_name] = 0
-            for message in messages:
-                if not message.message:
-                    continue
-                message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-                message_tokens = [token for token in list(jieba.cut(message_text)) if token.strip() != ""]
-                for token in message_tokens:
-                    for city_name in self.all_cities.keys():
-                        if token == city_name:
-                            district_counts[city_name] += 1
-                        for district_name in self.all_cities[city_name]:
-                            if token == district_name:
-                                district_counts[city_name] += 1
-            max_city = max(district_counts, key=district_counts.get)
-            max_count = district_counts[max_city]
-            if max_count > 0:
-                group_city = max_city
-                logger.info(f"Group {group.id},{group.username},{group.title} in city {max_city} by messages")
-        
+            else:
+                messages_text = ' ' . join([ message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') 
+                                 for message in messages if message.message ])
+                message_city = self.get_city_from_text(messages_text)
+                if message_city:
+                    group_city = message_city
+                    logger.info(f"Group {group.id},{group.username},{group.title} in city {message_city} by messages")
+
+        # 如果根据群成员和群消息都无法判断，就直接根据群组名来判断（群组名可能不可信，所以最后才采用）
+        if group_city == None:
+            title_tokens = list(jieba.cut(group.title))
+            for token in title_tokens:
+                for city_name in self.all_cities.keys():
+                    if token == city_name:
+                        group_city = city_name
+            logger.info(f"Group {group.id},{group.username},{group.title} in city {group_city} by title")
+
         if group_city:
             self.group_model.update_group_city(group.id, group_city)
 
-    def process_channel(self, channel: Channel, group_title: str):
+    def process_channel(self, channel: Channel, city: str):
         logger.info(f"Processing channel: {channel.id},{channel.username},{channel.title}")
         # 过滤广告、已经抓取过的Channel
         if filter_entity_by_title(channel.title):
@@ -170,18 +158,14 @@ class GroupAgent():
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
-            channel_item = self.channel_model.get_channel(channel.id)
-            if channel_item[8].find(group_title) < 0:
-                new_from_groups = channel_item[8] + ";" + group_title
-                self.channel_model.update_channel_from_groups(channel.id, new_from_groups)
         else:
             self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                           channel.participants_count, today_date, group_title)
+                                           channel.participants_count, today_date)
             logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
-            self.channel_agent.parse_channel(channel, group_title)
+            self.channel_agent.parse_channel(channel, city)
 
-    def process_chat_names(self, chat_names: list, group_title: str) -> None:
-        logger.info(f"Processing chat names {chat_names} from group {group_title}")
+    def process_chat_names(self, chat_names: list, city: str) -> None:
+        logger.info(f"Processing chat names {chat_names} from {city}")
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
@@ -204,24 +188,28 @@ class GroupAgent():
                 logger.error(f"Failed to get_entity {chat_name}: {e}")
                 continue
 
-            # 过滤User
+            # 过滤 User
             if isinstance(chat, User):
                 logger.info(f"Ignore chat as user: {chat_name}")
                 continue
 
-            # 如果是Group
+            # 如果是 Group
             if chat.megagroup == True:
                 self.process_group(chat)
-            # 如果是Channel
+            # 如果是 Channel
             else:
-                self.process_channel(chat, group_title)
+                self.process_channel(chat, city)
 
-    # 获取群组成员，从群组成员的about中获取group或channel
+    # 获取群组成员，从群组成员的 about 中获取 group 或 channel
     def get_group_members(self) -> None:
         for group_item in self.group_model.get_all_groups():
+            # 过滤失效的 group
+            if group_item[5] < 0:
+                continue
             id, username, title = group_item[0:3]
             logger.info(f"Get members for group {id},{username},{title}")
-            # TODO: 这里不知道为什么，先get_entity可以减少get_participants失败的情况
+            group_city = group_item[4]
+            # TODO: 这里不知道为什么，先 get_entity 可以减少 get_participants 失败的情况
             try:
                 group = self.client.get_entity(id)
             except Exception as e:
@@ -232,6 +220,13 @@ class GroupAgent():
                         if isinstance(group, ChannelForbidden):
                             logger.error(f"Group {id},{username},{title} is forbidden")
                             raise(e)
+                        # TODO: 通过 username 可能获得一个新的group？
+                        if group.id != id:
+                            logger.error(f"Group {id},{username},{title} is not the same as {group.id}")
+                            if not self.group_model.does_group_exist(group.id):
+                                self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
+                                logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
+                            raise(e)
                     else:
                         raise(e)
                 except Exception as e:
@@ -239,8 +234,11 @@ class GroupAgent():
                     self.group_model.update_group_status(id, -1)
                     continue
 
-            self.process_group(group)
-            continue
+            # group 的 username 和 title 可能会变化，需要更新
+            if group.username != group_item[1] or group.title != group_item[2]:
+                self.group_model.update_group(group.id, group.username, group.title,
+                                                  group.participants_count, today_date)
+                logger.info(f"Update group {group.id},{group.username},{group.title}")
 
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
             # TODO: 需要记录获取成员失败的群，后续二次处理
@@ -256,7 +254,7 @@ class GroupAgent():
                 if member.bot:
                     continue
                 if filter_entity_by_title(member.first_name) or filter_entity_by_title(member.last_name):
-                    logger.info(f"filter member {member.first_name},{member.last_name} for group {id},{username},{title}")
+                    logger.info(f"Filter member {member.first_name},{member.last_name} for group {id},{username},{title}")
                     continue
                 if member.first_name == "" and member.last_name == "" and member.username == "":
                     continue
@@ -277,7 +275,7 @@ class GroupAgent():
                 if not self.user_model.does_user_exist(member.id):
                     self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
                     logger.info(f"Add new user {member.id},{member.username} to db")
-                if not self.user_model.is_user_in_group(id, member.id):
+                if not self.group_model.is_user_in_group(id, member.id):
                     self.group_model.add_user_to_group(id, member.id, today_date)
                     logger.info(f"Add new user {member.id},{member.username} to group {id},{username},{title}")
 
@@ -289,7 +287,13 @@ class GroupAgent():
                 chat_names = find_channel(about)
                 if len(chat_names) < 1:
                     continue
-                self.process_chat_names(chat_names, title)
+
+                member_text = (member.first_name if member.first_name else "") + " " \
+                                + (member.last_name if member.last_name else "") + " " + about
+                member_city = self.get_city_from_text(member_text, 1)
+                if member_city == None:
+                    member_city = group_city
+                self.process_chat_names(chat_names, member_city)
 
     # 获取群组消息，从群组消息中获取group或channel
     def get_group_messages(self) -> None:

@@ -43,7 +43,7 @@ class ChannelAgent():
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
     # 抓取Channel消息，并调用LLM判断channel类型
-    def parse_channel(self, channel: Channel, group_title: str):
+    def parse_channel(self, channel: Channel, city: str):
         # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
         try:
             messages = self.client.get_messages(channel.id, limit=200, reverse=True)
@@ -118,10 +118,10 @@ class ChannelAgent():
             self.channel_model.update_channel_type(channel.id, channel_type)
         
         if channel_type == 1:
-            self.llm_get_info(channel.title, prompt_content, group_title)
+            self.llm_get_info(channel.title, prompt_content, city)
 
     def single_parse_channel(self, channel: Channel, channel_item: list):
-        logger.info(f"parse channel: {channel.id},{channel.username},{channel.title}")
+        logger.info(f"Parse channel: {channel.id},{channel.username},{channel.title}")
 
         # 为了控制prompt的token数，优先用pinned消息，再用其他消息
         pinned_messages, candidate_messages, prompt_messages = [], [], []
@@ -180,6 +180,9 @@ class ChannelAgent():
                         if isinstance(channel, ChannelForbidden):
                             logger.error(f"Channel {channel_item[0]},{channel_item[1]},{channel_item[2]} is forbidden")
                             raise(e)
+                        if channel.id != channel_item[0]:
+                            logger.error(f"Channel {channel_item[0]},{channel_item[1]},{channel_item[2]} is not the same as {channel.id}")
+                            raise(e)
                     else:
                         raise(e)
                 except Exception as e:
@@ -191,7 +194,7 @@ class ChannelAgent():
             if channel.username != channel_item[1] or channel.title != channel_item[2]:
                 self.channel_model.update_channel(channel.id, channel.username, channel.title,
                                                   channel.participants_count, today_date)
-                logger.info(f"update channel {channel.id},{channel.username},{channel.title}")
+                logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
 
             self.single_parse_channel(channel, channel_item)
 

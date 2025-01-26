@@ -54,7 +54,6 @@ CREATE TABLE kt.channels (
 	retries INT DEFAULT 0,
 	status INT DEFAULT 0,
 	updated_on DATE,
-	from_groups TEXT
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -83,9 +82,7 @@ COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS kt.teachers;
 CREATE TABLE kt.teachers (
 	id BIGINT PRIMARY KEY,
-	channel_id BIGINT NOT NULL,
 	channel_username VARCHAR(100),
-	channel_title VARCHAR(255) NOT NULL,
 	name VARCHAR(100),
 	city VARCHAR(100),
 	districts VARCHAR(100),

@@ -64,11 +64,11 @@ class GroupAgent():
                 logger.info(f"Ignore dialog as user: {dialog.name}")
             elif dialog.is_channel:
                 logger.info(f"Ignore dialog as channel: {dialog.name}")
+        '''
 
         # 记录已经抓取过的names，减少重复请求
         self.chat_names = {}
-        '''
-
+        
     def get_city_from_text(self, text, threshold=3) -> str:
         district_counts = {}
         for city_name in self.all_cities.keys():
@@ -85,7 +85,6 @@ class GroupAgent():
 
         max_city = max(district_counts, key=district_counts.get)
         max_count = district_counts[max_city]
-        print(district_counts)
         if max_count >= threshold:
             return max_city
         return None

@@ -2,19 +2,27 @@ import os
 from datetime import date
 from configparser import ConfigParser
 from loguru import logger
+from http import HTTPStatus
+import json
+import paddleocr
+import dashscope
 
 from telethon.sync import TelegramClient
 from telethon.tl.types import Channel, ChannelForbidden, MessageMediaPhoto
 
-from paddleocr import PaddleOCR
-from http import HTTPStatus
-import dashscope
-
 from models.channel_model import ChannelModel
+from models.teacher_model import TeacherModel
 from utils.chats import *
 
 
 today_date = date.today()
+
+logger.add(
+    "kt.log",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
+    encoding="utf-8"
+)
 
 class ChannelAgent():
     def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
@@ -26,9 +34,11 @@ class ChannelAgent():
         self.db_database = config.get('DATABASE', 'db_database')
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
+        self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
 
         self.media_path = config.get('APPLICATION', 'media_path')
-        self.ocr = PaddleOCR(lang='ch', show_log=False)
+        self.ocr = paddleocr.PaddleOCR(lang='ch', show_log=False)
 
         type_prompt_template_file = 'config/type_prompt_template.txt'
         try:
@@ -42,16 +52,16 @@ class ChannelAgent():
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
-    # 抓取Channel消息，并调用LLM判断channel类型
+    # 抓取 channel 消息，并调用 LLM 判断 channel 类型
     def parse_channel(self, channel: Channel, city: str):
         # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
         try:
             messages = self.client.get_messages(channel.id, limit=200, reverse=True)
         except Exception as e:
-            logger.error(f"Get messages error for {channel.id}: {e}")
+            logger.error(f"Get messages of channel {channel.id} error: {e}")
             return
 
-        # 为了控制prompt的token数，优先用pinned消息，再用其他消息
+        # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
         pinned_messages, candidate_messages = [], []
         for message in messages:
             if not message.message:
@@ -113,12 +123,35 @@ class ChannelAgent():
         if prompt_content == "":
             return
 
+        # 调用 LLM 判断 channel 类型
         channel_type = self.llm_judge_type(prompt_content)
+        logger.info(f"Channel {channel.id},{channel.username},{channel.title} is type {channel_type}")
         if channel_type != 0:
             self.channel_model.update_channel_type(channel.id, channel_type)
-        
+
+        # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
-            self.llm_get_info(channel.title, prompt_content, city)
+            info_data = self.llm_get_info(city + channel.title, prompt_content)
+            if info_data is None:
+                return
+            info_data = clean_json_string(info_data)
+            try:
+                info = json.loads(info_data)
+            except Exception as e:
+                logger.error(f"Parse channel {channel.id},{channel.username},{channel.title} info error: {e}")
+                return
+            logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {info}")
+
+            if self.teacher_model.does_teacher_exist(channel.id):
+                logger.info(f"Already added teacher: {channel.id},{channel.username}")
+            else:
+                name, city, district, age, price, height, weight, measurement, service = \
+                    info.get("name"), info.get("city"), info.get("district"), info.get("age"), info.get("price"), \
+                    info.get("height"), info.get("weight"), info.get("measurement"), info.get("service")
+                self.teacher_model.add_teacher(channel.id, channel.username,
+                                               name, city, district, age, price, height, weight, measurement, service,
+                                               0, today_date)
+                logger.info(f"Add new teacher to db: {channel.id},{channel.username}{name}")
 
     def single_parse_channel(self, channel: Channel, channel_item: list):
         logger.info(f"Parse channel: {channel.id},{channel.username},{channel.title}")
@@ -151,7 +184,7 @@ class ChannelAgent():
         prompt_content = ";".join(prompt_messages)
         if prompt_content == "":
             return
-        
+
         # 如果已经解析过 type，或者解析失败次数过多，跳过
         channel_type = channel_item[4]
         if channel_item[4] == 0 and channel_item[5] < 3:
@@ -159,7 +192,7 @@ class ChannelAgent():
             channel_type = self.llm_judge_type(prompt_content)
             if channel_type != 0:
                 self.channel_model.update_channel_type(channel.id, channel_type)
-        
+
         if channel_type == 1:
             self.llm_get_info(channel.title, prompt_content)
 
@@ -198,7 +231,7 @@ class ChannelAgent():
 
             self.single_parse_channel(channel, channel_item)
 
-    # LLM判断channel类型：0-无法判断，1-按摩师，2-导航，100-其他
+    # 调用 LLM 判断 channel 类型：0-无法判断，1-按摩师，2-导航，100-其他
     def llm_judge_type(self, content: str) -> int:
         # 读取prompt模板文件
         system_prompt = self.type_prompt_template % (content)
@@ -214,15 +247,15 @@ class ChannelAgent():
                 result_format='message',
                 temperature=0.1
                 )
-            print(content)
-            print(response)
+            logger.info(content)
+            logger.info(response)
         except Exception as e:
             logger.error(f"LLM parse type error for {content}: {e}")
             return 0
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type error {response}")
             return 0
-        
+
         output = response.output.choices[0].message.content
         if output.startswith('按摩师'):
             return 1
@@ -231,11 +264,11 @@ class ChannelAgent():
         elif output.startswith('其他'):
             return 100
         return 0
-    
-    # LLM获取channel信息
-    def llm_get_info(self, title: str, content: str, group_title: str) -> int:
+
+    # 调用 LLM 获取 channel 信息
+    def llm_get_info(self, title: str, content: str):
         # 读取prompt模板文件
-        system_prompt = self.info_prompt_template % (group_title, title, content)
+        system_prompt = self.info_prompt_template % (title, content)
         messages = [
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': ''}
@@ -248,15 +281,13 @@ class ChannelAgent():
                 result_format='message',
                 temperature=0.1
                 )
-            print(content)
-            print(response)
+            logger.info(content)
+            logger.info(response)
         except Exception as e:
             logger.error(f"LLM get info error for {content}: {e}")
-            return 0
+            return None
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM get info error {response}")
-            return 0
-        
-        output = response.output.choices[0].message.content
+            return None
 
-        return 0
+        return response.output.choices[0].message.content

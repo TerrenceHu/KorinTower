@@ -7,7 +7,6 @@ from telethon.errors import SessionPasswordNeededError
 from agents.group_agent import GroupAgent
 from agents.channel_agent import ChannelAgent
 
-
 logger.add(
     "kt.log",
     level="INFO",

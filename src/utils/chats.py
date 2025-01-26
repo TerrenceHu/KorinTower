@@ -8,6 +8,13 @@ def find_channel(about):
     
     return matches
 
+def clean_json_string(data: str) -> str:
+    # 使用正则表达式匹配第一个 { 和最后一个 }
+    data = data.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    match = re.search(r'\{.*?\}', data)
+    if match:
+        return match.group(0)
+    return data
 
 # 过滤掉一些不需要的群
 def filter_group_by_title(name: str) -> bool:    

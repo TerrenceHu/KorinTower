@@ -38,14 +38,15 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    #channel_agent = ChannelAgent(client, config)
-    #channel = client.get_entity("SZshareGF")
+    channel_agent = ChannelAgent(client, config)
+    channel = client.get_entity("hxh8899")
+    
+    channel_agent.parse_channel(channel, '')
 
-    group_agent = GroupAgent(client, config)
-    group = client.get_entity(2470910904)
-    print(group)
-    group_agent.process_group(group)
-    #channel_agent.get_channel_messages(channel)
+    #group_agent = GroupAgent(client, config)
+    #group_agent.process_group(group)
+    #group = client.get_entity(2470910904)
+    #print(group)
 
     return
 

@@ -82,10 +82,10 @@ COLLATE=utf8mb4_general_ci;
 DROP TABLE IF EXISTS kt.teachers;
 CREATE TABLE kt.teachers (
 	id BIGINT PRIMARY KEY,
-	channel_username VARCHAR(100),
+	username VARCHAR(100),
 	name VARCHAR(100),
 	city VARCHAR(100),
-	districts VARCHAR(100),
+	district VARCHAR(100),
 	age VARCHAR(100),
 	price VARCHAR(100),
 	height VARCHAR(100),

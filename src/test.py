@@ -39,9 +39,10 @@ def main() -> None:
             client.sign_in(password=input('Password: '))
 
     channel_agent = ChannelAgent(client, config)
-    channel = client.get_entity("hxh8899")
+    channel = client.get_entity("yzbyjy666")
     
-    channel_agent.parse_channel(channel, '')
+    channel_agent.parse_channel(channel, '深圳')
+
 
     #group_agent = GroupAgent(client, config)
     #group_agent.process_group(group)

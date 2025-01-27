@@ -152,6 +152,17 @@ class ChannelAgent():
                                                name, city, district, age, price, height, weight, measurement, service,
                                                0, today_date)
                 logger.info(f"Add new teacher to db: {channel.id},{channel.username}{name}")
+        
+        # 对导航类型，继续解析 channel 消息
+        if channel_type == 2:
+            all_chat_names = []
+            for message_text in pinned_messages + candidate_messages:
+                chat_names = find_channel(message_text)
+                if len(chat_names) > 0:
+                    all_chat_names.extend(chat_names)
+            print(all_chat_names)
+            all_chat_names = list(set(all_chat_names))
+            print(all_chat_names)
 
     def single_parse_channel(self, channel: Channel, channel_item: list):
         logger.info(f"Parse channel: {channel.id},{channel.username},{channel.title}")

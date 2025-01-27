@@ -39,7 +39,8 @@ def main() -> None:
 
     group_agent = GroupAgent(client, config)
     # 获取群成员信息，存量，可以每个月一次
-    group_agent.get_group_members()
+    #group_agent.get_group_members()
+
     # 获取群消息，增量，每天一次
     #group_agent.get_group_messages()
 

@@ -74,16 +74,6 @@ class TeacherModel:
         values = (username, title, participants_count, updated_on, channel_id)
         return self._execute_query(update_query, values)
     
-    def update_channel_status(self, channel_id: int, status: int) -> bool:
-        """
-        更新指定频道的 status 字段
-        """
-        update_query = '''
-        UPDATE channels SET status = %s WHERE id = %s;
-        '''
-        values = (status, channel_id)
-        return self._execute_query(update_query, values)
-    
     def delete_teacher(self, id: int):
         """
         删除指定 teacher 记录

@@ -3,8 +3,12 @@ import re
 import requests
 
 def find_channel(about):
-    pattern = r't\.me/([\w+-]+)'
-    matches = re.findall(pattern, str(about))
+    pattern1 = r't\.me/([\w+-]+)'
+    pattern2 = r'@([\w_]+)'
+    
+    matches1 = re.findall(pattern1, str(about))
+    matches2 = re.findall(pattern2, str(about))
+    matches = matches1 + matches2
     
     return matches
 

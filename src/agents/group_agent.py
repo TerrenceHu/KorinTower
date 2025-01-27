@@ -17,6 +17,7 @@ from models.user_model import UserModel
 from models.district_model import DistrictModel
 
 from agents.channel_agent import ChannelAgent
+from globals import *
 from utils.chats import *
 
 
@@ -54,20 +55,15 @@ class GroupAgent():
                 district_name = district[1]
                 self.all_cities[city_name][district_name] = 0
 
-        '''
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
             logger.info(f"Get dialog: {dialog.name}")
+            if dialog.is_user:
+                logger.info(f"Ignore dialog as user: {dialog.name}")
             if dialog.is_group:
                 self.process_group(dialog.entity)
-            elif dialog.is_user:
-                logger.info(f"Ignore dialog as user: {dialog.name}")
             elif dialog.is_channel:
-                logger.info(f"Ignore dialog as channel: {dialog.name}")
-        '''
-
-        # 记录已经抓取过的names，减少重复请求
-        self.chat_names = {}
+                self.process_channel(dialog.entity, "")
         
     def get_city_from_text(self, text, threshold=3) -> str:
         district_counts = {}
@@ -102,9 +98,16 @@ class GroupAgent():
 
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group {group.id},{group.username},{group.title}")
-        else:
-            self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
-            logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
+            # group 的 username 和 title 可能会变化，需要更新
+            group_item = self.group_model.get_group_by_id(group.id)
+            if group.username != group_item[1] or group.title != group_item[2]:
+                self.group_model.update_group(group.id, group.username, group.title,
+                                                  group.participants_count, today_date)
+                logger.info(f"Update group {group.id},{group.username},{group.title}")
+            return
+        
+        self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
+        logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
 
         group_city = None
         # 根据群成员的城市或辖区来判断群组归属的城市
@@ -157,22 +160,29 @@ class GroupAgent():
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
-        else:
-            self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                           channel.participants_count, today_date)
-            logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
-            self.channel_agent.parse_channel(channel, city)
+            # channel的username和title可能会变化，需要更新
+            channel_item = self.channel_model.get_channel_by_id(channel.id)
+            if channel.username != channel_item[1] or channel.title != channel_item[2]:
+                self.channel_model.update_channel(channel.id, channel.username, channel.title,
+                                                  channel.participants_count, today_date)
+                logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
+            return
+        
+        self.channel_model.add_channel(channel.id, channel.username, channel.title,
+                                       channel.participants_count, today_date)
+        logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
+        self.channel_agent.parse_channel(channel, city)
 
     def process_chat_names(self, chat_names: list, city: str) -> None:
         logger.info(f"Processing chat names {chat_names} from {city}")
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
-            if chat_name in self.chat_names:
+            if chat_name in processed_chat_names:
                 logger.info(f"Already checked chat: {chat_name}")
                 continue
             else:
-                self.chat_names[chat_name] = 1
+                processed_chat_names[chat_name] = 1
 
             # TODO: 加入 private chat 怎么处理？
             '''
@@ -207,7 +217,7 @@ class GroupAgent():
                 continue
             id, username, title = group_item[0:3]
             logger.info(f"Get members for group {id},{username},{title}")
-            group_city = group_item[4]
+            
             # TODO: 这里不知道为什么，先 get_entity 可以减少 get_participants 失败的情况
             try:
                 group = self.client.get_entity(id)
@@ -287,6 +297,7 @@ class GroupAgent():
                 if len(chat_names) < 1:
                     continue
 
+                group_city = group_item[4]
                 member_text = (member.first_name if member.first_name else "") + " " \
                                 + (member.last_name if member.last_name else "") + " " + about
                 member_city = self.get_city_from_text(member_text, 1)

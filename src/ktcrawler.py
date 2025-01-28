@@ -4,8 +4,7 @@ from configparser import ConfigParser
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from agents.group_agent import GroupAgent
-from agents.channel_agent import ChannelAgent
+from agents.chat_agent import ChatAgent
 
 logger.add(
     "kt.log",
@@ -37,9 +36,9 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    group_agent = GroupAgent(client, config)
+    chat_agent = ChatAgent(client, config)
     # 获取群成员信息，存量，可以每个月一次
-    #group_agent.get_group_members()
+    chat_agent.get_group_members()
 
     # 获取群消息，增量，每天一次
     #group_agent.get_group_messages()

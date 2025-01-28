@@ -1,5 +1,5 @@
-import pytz
 import json
+import pytz
 from datetime import date, datetime, timedelta
 from configparser import ConfigParser
 from loguru import logger
@@ -7,7 +7,6 @@ from loguru import logger
 from telethon.sync import TelegramClient
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import User, Channel, ChannelForbidden
-from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 
 from globals import *
 from utils.chats import *
@@ -48,7 +47,7 @@ class ChatAgent():
             if dialog.is_group:
                 self.group_agent.process_group(dialog.entity)
 
-    # 获取群组成员，从群组成员的 about 中获取 group 或 channel
+    # 获取群组成员，从群组成员的 about 中获取新的 group 或 channel
     def get_group_members(self) -> None:
         for group_item in self.group_model.get_all_groups():
             # 过滤失效的 group
@@ -109,6 +108,13 @@ class ChatAgent():
                 if self.user_model.does_user_exist(member.id):
                     continue
 
+                if not self.user_model.does_user_exist(member.id):
+                    self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
+                    logger.info(f"Add new user {member.id},{member.username} to db")
+                if not self.group_model.is_user_in_group(id, member.id):
+                    self.group_model.add_user_to_group(id, member.id, today_date)
+                    logger.info(f"Add new user {member.id},{member.username} to group {id},{username},{title}")
+                
                 # 获取用户的info
                 try:
                     full_member = self.client(GetFullUserRequest(member))
@@ -118,14 +124,6 @@ class ChatAgent():
                 about = full_member.full_user.about
                 if about:
                     about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-
-                if not self.user_model.does_user_exist(member.id):
-                    self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
-                    logger.info(f"Add new user {member.id},{member.username} to db")
-                if not self.group_model.is_user_in_group(id, member.id):
-                    self.group_model.add_user_to_group(id, member.id, today_date)
-                    logger.info(f"Add new user {member.id},{member.username} to group {id},{username},{title}")
-
                 # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
                 if filter_entity_by_info(about):
                     continue
@@ -135,6 +133,7 @@ class ChatAgent():
                 if len(chat_names) < 1:
                     continue
 
+                # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
                 group_city = group_item[4]
                 member_text = (member.first_name if member.first_name else "") + " " \
                                 + (member.last_name if member.last_name else "") + " " + about
@@ -220,21 +219,19 @@ class ChatAgent():
                 self.channel_model.update_channel(channel.id, channel.username, channel.title,
                                                   channel.participants_count, today_date)
                 logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
-            return
+            #return
         
         self.channel_model.add_channel(channel.id, channel.username, channel.title,
                                        channel.participants_count, today_date)
         logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
-        self.parse_channel(channel, city)
 
-    # 抓取 channel 消息，并调用 LLM 判断 channel 类型
-    def parse_channel(self, channel: Channel, city: str):
+        # 抓取 channel 消息
         pinned_messages, candidate_messages = self.channel_agent.get_channel_messages(channel)
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Get messages of channel {channel.id} error: {e}")
             return
-
         self.channel_model.increment_retries(channel.id)
+
         # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
         prompt_messages = []
         prompt_len = 0
@@ -265,7 +262,7 @@ class ChatAgent():
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
             info_data = self.channel_agent.llm_get_info(city + channel.title, prompt_content)
-            if info_data is None:
+            if info_data is None or not info_data:
                 return
             try:
                 info = json.loads(info_data)

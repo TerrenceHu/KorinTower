@@ -1,19 +1,17 @@
-import pytz
+from datetime import date
 from configparser import ConfigParser
 from loguru import logger
-from datetime import date, datetime, timedelta
 import jieba
 
 from telethon.sync import TelegramClient
-from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import User, Channel, ChannelForbidden
+from telethon.tl.types import Channel
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 
+from utils.chats import *
 from models.group_model import GroupModel
 from models.district_model import DistrictModel
-from utils.chats import *
 
 
 today_date = date.today()

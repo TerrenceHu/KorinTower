@@ -18,7 +18,7 @@ def clean_json_string(data: str) -> str:
     match = re.search(r'\{.*?\}', data)
     if match:
         return match.group(0)
-    return data
+    return None
 
 # 过滤掉一些不需要的群
 def filter_group_by_title(name: str) -> bool:    

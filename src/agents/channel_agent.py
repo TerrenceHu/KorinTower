@@ -1,16 +1,16 @@
 import os
 from datetime import date
+from http import HTTPStatus
 from configparser import ConfigParser
 from loguru import logger
-from http import HTTPStatus
 import paddleocr
 import dashscope
 
 from telethon.sync import TelegramClient
 from telethon.tl.types import Channel, ChannelForbidden, MessageMediaPhoto
 
-from models.channel_model import ChannelModel
 from utils.chats import *
+from models.channel_model import ChannelModel
 
 
 today_date = date.today()
@@ -70,7 +70,7 @@ class ChannelAgent():
 
             # 只识别pinned消息中图片的文字信息
             message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-            if message.pinned:
+            if message.pinned or "课表" in message_text:
                 if isinstance(message.media, MessageMediaPhoto):
                     file_name = os.path.join(self.media_path, f"{channel.id}_{message.id}.jpg")
                     try:
@@ -94,9 +94,9 @@ class ChannelAgent():
 
             self.channel_model.add_message_to_channel(channel.id, message.id, message_text, message.pinned,
                                                       comments, replies, reactions, views, message.date)
-            return pinned_messages, candidate_messages
+        return pinned_messages, candidate_messages
 
-    # 调用 LLM 判断 channel 类型：0-无法判断，1-按摩师，2-导航，100-其他
+    # 调用 LLM 判断 channel 类型：0-初始值，-1-失败，1-按摩师，2-导航，100-其他
     def llm_judge_type(self, content: str) -> int:
         # 读取prompt模板文件
         system_prompt = self.type_prompt_template % (content)
@@ -116,10 +116,10 @@ class ChannelAgent():
             logger.info(response)
         except Exception as e:
             logger.error(f"LLM parse type error for {content}: {e}")
-            return 0
+            return -1
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type error {response}")
-            return 0
+            return -1
 
         output = response.output.choices[0].message.content
         if output.startswith('按摩师'):

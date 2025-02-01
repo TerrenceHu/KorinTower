@@ -38,8 +38,8 @@ def main() -> None:
             client.sign_in(password=input('Password: '))
 
     chat_agent = ChatAgent(client, config)
-    channel = client.get_entity("ccxdhd")
-    chat_agent.process_channel(channel, '深圳')
+    channel = client.get_entity("lllnnn1106")
+    chat_agent.process_channel(channel, '')
 
     #group_agent = GroupAgent(client, config)
     #group_agent.process_group(group)

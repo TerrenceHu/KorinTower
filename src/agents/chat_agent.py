@@ -1,4 +1,3 @@
-import json
 import pytz
 from datetime import date, datetime, timedelta
 from configparser import ConfigParser
@@ -43,7 +42,7 @@ class ChatAgent():
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
-            logger.info(f"Get dialog: {dialog.name}")
+            logger.info(f"Get dialog {dialog.name}")
             if dialog.is_group:
                 self.group_agent.process_group(dialog.entity)
 
@@ -88,7 +87,6 @@ class ChatAgent():
                 logger.info(f"Update group {group.id},{group.username},{group.title}")
 
             # 因Telegram API限制，无法获取全部群组成员；"aggressive" Does nothing
-            # TODO: 需要记录获取成员失败的群，后续二次处理
             try:
                 members = self.client.get_participants(id, aggressive=True)
             except Exception as e:
@@ -96,48 +94,15 @@ class ChatAgent():
                 continue
 
             for member in members:
-                # 过滤bot、广告号、已经爬过的用户，减少TG请求
-                # TODO: 可能用户信息会更新，需要重新爬取
-                if member.bot:
-                    continue
-                if filter_entity_by_title(member.first_name) or filter_entity_by_title(member.last_name):
-                    logger.info(f"Filter member {member.first_name},{member.last_name} for group {id},{username},{title}")
-                    continue
-                if member.first_name == "" and member.last_name == "" and member.username == "":
-                    continue
-                if self.user_model.does_user_exist(member.id):
-                    continue
-
-                if not self.user_model.does_user_exist(member.id):
-                    self.user_model.add_user(member.id, member.username, member.first_name, member.last_name, about)
-                    logger.info(f"Add new user {member.id},{member.username} to db")
-                if not self.group_model.is_user_in_group(id, member.id):
-                    self.group_model.add_user_to_group(id, member.id, today_date)
-                    logger.info(f"Add new user {member.id},{member.username} to group {id},{username},{title}")
-                
-                # 获取用户的info
-                try:
-                    full_member = self.client(GetFullUserRequest(member))
-                except Exception as e:
-                    logger.error(f"Failed to GetFullUserRequest {member.id},{member.username}: {e}")
-                    continue
-                about = full_member.full_user.about
-                if about:
-                    about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-                # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
-                if filter_entity_by_info(about):
-                    continue
-
-                # 从info中获取新的群组或频道
-                chat_names = find_channel(about)
-                if len(chat_names) < 1:
+                chat_names = self.process_user(member)
+                if not chat_names:
                     continue
 
                 # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
-                group_city = group_item[4]
                 member_text = (member.first_name if member.first_name else "") + " " \
                                 + (member.last_name if member.last_name else "") + " " + about
                 member_city = self.group_agent.get_city_from_text(member_text, threshold=1)
+                group_city = group_item[4]
                 if member_city == None:
                     member_city = group_city
                 self.process_chat_names(chat_names, member_city)
@@ -169,23 +134,20 @@ class ChatAgent():
                 f.close()
             '''
 
-    def process_chat_names(self, chat_names: list, city: str) -> None:
-        logger.info(f"Processing chat names {chat_names} from {city}")
+    def process_chat_names(self, chat_names: list, context_city: str) -> None:
+        logger.info(f"Processing chat names {chat_names} from {context_city}")
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
             if chat_name in processed_chat_names:
-                logger.info(f"Already checked chat: {chat_name}")
+                logger.info(f"Already checked chat {chat_name}")
                 continue
-            else:
-                processed_chat_names[chat_name] = 1
+            processed_chat_names[chat_name] = 1
 
             # TODO: 加入 private chat 怎么处理？
-            '''
             if chat_name.startswith("+"):
-                self.join_private_chat(chat_name)
+                #self.join_private_chat(chat_name)
                 continue
-            '''
 
             try:
                 chat = self.client.get_entity(chat_name)
@@ -195,42 +157,54 @@ class ChatAgent():
 
             # 过滤 User
             if isinstance(chat, User):
-                logger.info(f"Ignore chat as user: {chat_name}")
+                logger.info(f"Ignore chat {chat_name} as user")
                 continue
             # 如果是 Group
             if chat.megagroup == True:
                 self.group_agent.process_group(chat)
             # 如果是 Channel
             else:
-                self.process_channel(chat, city)
+                self.process_channel(chat, context_city)
 
-    def process_channel(self, channel: Channel, city: str):
-        logger.info(f"Processing channel: {channel.id},{channel.username},{channel.title}")
-        # 过滤广告、已经抓取过的Channel
+    def process_channel(self, channel: Channel, context_city: str):
+        logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
+        # 过滤广告、已经抓取过的 channel
         if filter_entity_by_title(channel.title):
-            logger.info(f"Filter ad channel: {channel.id},{channel.username},{channel.title}")
-            return
+            logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title}")
+            return None
 
         if self.channel_model.does_channel_exist(channel.id):
-            logger.info(f"Already added channel: {channel.id},{channel.username},{channel.title}")
-            # channel的username和title可能会变化，需要更新
+            logger.info(f"Already added channel {channel.id},{channel.username},{channel.title}")
+            # channel 的 username 和 title 可能会变化，需要更新
             channel_item = self.channel_model.get_channel_by_id(channel.id)
             if channel.username != channel_item[1] or channel.title != channel_item[2]:
                 self.channel_model.update_channel(channel.id, channel.username, channel.title,
                                                   channel.participants_count, today_date)
                 logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
-            #return
-        
-        self.channel_model.add_channel(channel.id, channel.username, channel.title,
+            # 解析3次及以上仍然失败，就不再解析了
+            if channel_item[4] <= 0 and channel_item[5] >= 3:
+                return None
+            # TODO: 如果解析成功过，就不再解析了
+            if channel_item[4] > 0:
+                cur_teacher = self.teacher_model.get_teacher_by_id(channel.id)
+                if cur_teacher:
+                    return cur_teacher
+                else:
+                    return None
+        else:
+            self.channel_model.add_channel(channel.id, channel.username, channel.title,
                                        channel.participants_count, today_date)
-        logger.info(f"Add new channel to db: {channel.id},{channel.username},{channel.title}")
+            logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息
         pinned_messages, candidate_messages = self.channel_agent.get_channel_messages(channel)
+        #for message in pinned_messages:
+        #    logger.info(f"---{message}")
+        #for message in candidate_messages:
+        #    logger.info(f"==={message}")
         if pinned_messages == None and candidate_messages == None:
-            logger.error(f"Get messages of channel {channel.id} error: {e}")
-            return
-        self.channel_model.increment_retries(channel.id)
+            logger.error(f"Empty messages of channel {channel.id}")
+            return None
 
         # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
         prompt_messages = []
@@ -251,8 +225,9 @@ class ChatAgent():
 
         prompt_content = ";".join(prompt_messages)
         if prompt_content == "":
-            return
+            return None
 
+        self.channel_model.increment_retries(channel.id)
         # 调用 LLM 判断 channel 类型
         channel_type = self.channel_agent.llm_judge_type(prompt_content)
         logger.info(f"Channel {channel.id},{channel.username},{channel.title} is type {channel_type}")
@@ -261,34 +236,94 @@ class ChatAgent():
 
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
-            info_data = self.channel_agent.llm_get_info(city + channel.title, prompt_content)
-            if info_data is None or not info_data:
-                return
-            try:
-                info = json.loads(info_data)
-            except Exception as e:
-                logger.error(f"Parse channel {channel.id},{channel.username},{channel.title} info error: {e}")
-                return
-            logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {info}")
-
-            if self.teacher_model.does_teacher_exist(channel.id):
-                logger.info(f"Already added teacher: {channel.id},{channel.username}")
-            else:
-                name, city, district, age, price, height, weight, measurement, service = \
-                    info.get("name"), info.get("city"), info.get("district"), info.get("age"), info.get("price"), \
-                    info.get("height"), info.get("weight"), info.get("measurement"), info.get("service")
-                self.teacher_model.add_teacher(channel.id, channel.username,
-                                               name, city, district, age, price, height, weight, measurement, service,
-                                               0, today_date)
-                logger.info(f"Add new teacher to db: {channel.id},{channel.username}{name}")
-        
+            return self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
         # 对导航类型，继续解析 channel 消息
-        if channel_type == 2:
-            all_chat_names = []
+        elif channel_type == 2:
             for message_text in pinned_messages + candidate_messages:
-                chat_names = find_channel(message_text)
-                if len(chat_names) > 0:
-                    all_chat_names.extend(chat_names)
-            print(all_chat_names)
-            all_chat_names = list(set(all_chat_names))
-            print(all_chat_names)
+                self.process_message(channel, context_city, message_text)
+        return None
+
+    def process_user(self, user: User):
+        # 过滤bot、广告号、已经爬过的用户，减少TG请求
+        # TODO: 可能用户信息会更新，需要重新爬取
+        if user.bot:
+            return None
+        if filter_entity_by_title(user.first_name) or filter_entity_by_title(user.last_name):
+            logger.info(f"Filter user {user.username}{user.first_name},{user.last_name}")
+            return None
+        if user.first_name == "" and user.last_name == "" and user.username == "":
+            return None
+        if self.user_model.does_user_exist(user.id):
+            return None
+
+        # 获取用户的info
+        try:
+            full_member = self.client(GetFullUserRequest(user))
+        except Exception as e:
+            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
+            return None
+        
+        about = full_member.full_user.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
+        if filter_entity_by_info(about):
+            return None
+
+        if not self.user_model.does_user_exist(user.id):
+            self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
+            logger.info(f"Add new user {user.id},{user.username} to db")
+
+        # 从info中获取新的群组或频道
+        chat_names = find_channel(about)
+        if len(chat_names) < 1:
+            return None
+        return chat_names
+
+    def process_message(self, channel: Channel, context_city: str, message_text: str):
+        chat_names = find_channel(message_text)
+        if len(chat_names) < 1:
+            return
+        logger.info(f"Process message {chat_names}")  
+
+        for chat_name in chat_names:
+            if chat_name.lower().endswith("bot"):
+                continue
+            if chat_name in processed_chat_names:
+                logger.info(f"Already checked chat {chat_name}")
+                continue
+            processed_chat_names[chat_name] = 1
+            if chat_name == channel.username:
+                logger.info(f"Ignore self username {chat_name}")
+                continue
+
+            # TODO: 加入 private chat 怎么处理？
+            if chat_name.startswith("+"):
+                #self.join_private_chat(chat_name)
+                continue
+
+            try:
+                chat = self.client.get_entity(chat_name)
+            except Exception as e:
+                logger.error(f"Failed to get_entity {chat_name}: {e}")
+                continue
+
+            # 如果是 User
+            if isinstance(chat, User):
+                chat_names = self.process_user(chat)
+                logger.info(f"----111 {chat_names}")
+                if not chat_names:
+                    continue
+                self.process_chat_names(chat_names, context_city)
+            # 如果是 Group
+            elif chat.megagroup == True:
+                logger.info(f"----222 {chat_names}")
+                self.group_agent.process_group(chat)
+                logger.info(f"Get new group {chat_name} from {channel.id},{channel.username},{channel.title}")
+            # 如果是 Channel
+            else:
+                logger.info(f"----333 {chat_names}")
+                result = self.process_channel(chat, context_city)
+                if result:
+                    logger.info(f"Get new teacher {result} from {channel.id},{channel.username},{channel.title}")
+        return

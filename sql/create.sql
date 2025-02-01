@@ -30,17 +30,6 @@ ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_general_ci;
 
-DROP TABLE IF EXISTS kt.group_members;
-CREATE TABLE kt.group_members (
-	group_id BIGINT NOT NULL,
-	user_id BIGINT NOT NULL,
-	updated_on DATE,
-	PRIMARY KEY (group_id, user_id)
-)
-ENGINE=InnoDB
-DEFAULT CHARSET=utf8mb4
-COLLATE=utf8mb4_general_ci;
-
 --------------------------------
 -- channels
 --------------------------------

@@ -64,34 +64,6 @@ class GroupModel:
         values = (id,)
         result = self._fetch_one(query, values)
         return result
-    
-    def add_user_to_group(self, group_id: int, user_id: int, updated_on: date):
-        """
-        将用户添加到群组中
-        """
-        query = '''
-        INSERT INTO group_members (group_id, user_id, updated_on) VALUES (%s, %s, %s);
-        '''
-        try:
-            self.cursor.execute(query, (group_id, user_id, updated_on))
-            self.connection.commit()
-        except Error as e:
-            logger.error(f"Error adding user to group: {e} {group_id} {user_id}")
-
-    def is_user_in_group(self, group_id: int, user_id: int) -> bool:
-        """
-        检查用户是否已经是群组成员
-        """
-        query = '''
-        SELECT COUNT(*) FROM group_members WHERE group_id = %s AND user_id = %s;
-        '''
-        try:
-            self.cursor.execute(query, (group_id, user_id))
-            count = self.cursor.fetchone()[0]
-            return count > 0
-        except Error as e:
-            logger.error(f"Error checking if user exists in group {group_id},{user_id}: {e}")
-            return False
 
     def update_group(self, group_id: int, username: str, title: str,
                        participants_count: int, updated_on: date):

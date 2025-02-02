@@ -12,3 +12,6 @@ __pycache__/
 *.log
 *.csv
 *.jpg
+
+# others
+.DS_Store

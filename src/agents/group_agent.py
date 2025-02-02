@@ -6,7 +6,8 @@ import jieba
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import Channel
+from telethon.tl.types import Channel, ChannelForbidden
+
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 
 from utils.chats import *
@@ -63,6 +64,9 @@ class GroupAgent():
         return None
 
     def process_group(self, group: Channel):
+        if isinstance(group, ChannelForbidden):
+            logger.error(f"Group {group.id} is forbidden")
+            return
         logger.info(f"Processing group {group.id},{group.username},{group.title}")
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群

@@ -76,7 +76,7 @@ CREATE TABLE kt.teachers (
 	city VARCHAR(100),
 	district VARCHAR(100),
 	age VARCHAR(100),
-	price VARCHAR(100),
+	price VARCHAR(255),
 	height VARCHAR(100),
 	weight VARCHAR(100),
 	measurement VARCHAR(100),

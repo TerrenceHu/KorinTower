@@ -45,6 +45,8 @@ class ChatAgent():
             logger.info(f"Get dialog {dialog.name}")
             if dialog.is_group:
                 self.group_agent.process_group(dialog.entity)
+            #elif dialog.is_channel:
+            #    self.process_channel(dialog.entity)
 
     # 获取群组成员，从群组成员的 about 中获取新的 group 或 channel
     def get_group_members(self) -> None:
@@ -166,7 +168,7 @@ class ChatAgent():
             else:
                 self.process_channel(chat, context_city)
 
-    def process_channel(self, channel: Channel, context_city: str):
+    def process_channel(self, channel: Channel, context_city: str = ''):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
         if filter_entity_by_title(channel.title):

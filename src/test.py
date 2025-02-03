@@ -38,7 +38,7 @@ def main() -> None:
             client.sign_in(password=input('Password: '))
 
     chat_agent = ChatAgent(client, config)
-    channel = client.get_entity("lbchaopao")
+    channel = client.get_entity("Fde123jilu")
     chat_agent.process_channel(channel, '')
 
     #group_agent = GroupAgent(client, config)

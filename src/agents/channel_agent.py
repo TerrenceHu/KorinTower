@@ -134,8 +134,8 @@ class ChannelAgent():
             return -1
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type wrong code: {response}")
-            system_prompt = self.type_prompt_template % (remove_keywords(content))
-            logger.info(remove_keywords(content))
+            system_prompt = self.type_prompt_template % (remove_nsfw_keywords(content))
+            logger.info(remove_nsfw_keywords(content))
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}
@@ -186,8 +186,8 @@ class ChannelAgent():
             return None
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
-            system_prompt = self.info_prompt_template % (title, remove_keywords(content))
-            logger.info(remove_keywords(content))
+            system_prompt = self.info_prompt_template % (title, remove_nsfw_keywords(content))
+            logger.info(remove_nsfw_keywords(content))
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}

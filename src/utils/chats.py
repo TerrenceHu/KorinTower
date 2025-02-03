@@ -58,7 +58,7 @@ def read_prompt_template(file_path: str) -> str:
     with open(file_path, 'r', encoding='utf-8') as file:
         return file.read()
 
-def remove_keywords(text: str) -> str:
+def remove_nsfw_keywords(text: str) -> str:
     """从文本中删除指定的关键词"""
     keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"调教", u"耳光", u"鞭打", u"勾引",
                 u"体位", u"后入", u"女上位", u"69", u"戴套", u"屌感", u"全裸", u"波推", u"漫游", u"丝足",

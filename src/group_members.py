@@ -36,8 +36,8 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    chat_agent = ChatAgent(client, config)
     # 获取群成员信息，存量，可以每周一次
+    chat_agent = ChatAgent(client, config)
     chat_agent.get_group_members()
 
 

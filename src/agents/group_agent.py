@@ -21,7 +21,6 @@ jieba.load_userdict('data/userdict.txt')
 class GroupAgent():
     def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
         self.client = client
-        self.config = config
 
         # 群组的数据库模型
         self.db_host = config.get('DATABASE', 'db_host')

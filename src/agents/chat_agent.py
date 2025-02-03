@@ -2,6 +2,8 @@ import pytz
 from datetime import date, datetime, timedelta
 from configparser import ConfigParser
 from loguru import logger
+import joblib
+import jieba
 
 from telethon.sync import TelegramClient
 from telethon.tl.functions.users import GetFullUserRequest
@@ -11,17 +13,16 @@ from globals import *
 from utils.chats import *
 from agents.group_agent import GroupAgent
 from agents.channel_agent import ChannelAgent
+from models.user_model import UserModel
 from models.group_model import GroupModel
 from models.channel_model import ChannelModel
 from models.teacher_model import TeacherModel
-from models.user_model import UserModel
 
 today_date = date.today()
 
 class ChatAgent():
     def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
         self.client = client
-        self.config = config
 
         # 群组、频道和用户的数据库模型
         self.db_host = config.get('DATABASE', 'db_host')
@@ -40,13 +41,31 @@ class ChatAgent():
         self.group_agent = GroupAgent(client, config)
         self.channel_agent = ChannelAgent(client, config)
 
+        # 加载停用词表和自定义词表
+        stopwords_filename = config.get('MODEL', 'stopwords_filename')
+        userdict_filename = config.get('MODEL', 'userdict_filename')
+        self.stop_words = set(jieba.lcut(open(stopwords_filename, 'r', encoding='utf-8').read()))
+        jieba.load_userdict(userdict_filename)
+
+        # 加载消息文本分类模型和向量化器
+        try:
+            classifier_model_filename = config.get('MODEL', 'classifier_model_filename')
+            classifier_vectorizer_filename = config.get('MODEL', 'classifier_vectorizer_filename')
+            self.classifier_model = joblib.load(classifier_model_filename)
+            self.classifier_vectorizer = joblib.load(classifier_vectorizer_filename)
+        except FileNotFoundError:
+            logger.error(f"Message classifier model or vectorizer not found: \
+                         {classifier_model_filename},{classifier_vectorizer_filename}")
+        except Exception as e:
+            logger.error(f"Load message classifier model or vectorizer error: {e}")
+
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
             logger.info(f"Get dialog {dialog.name}")
             if dialog.is_group:
                 self.group_agent.process_group(dialog.entity)
             #elif dialog.is_channel:
-            #    self.process_channel(dialog.entity)
+            #    self.process_channel(dialog.entity, '')
 
     # 获取群组成员，从群组成员的 about 中获取新的 group 或 channel
     def get_group_members(self) -> None:
@@ -56,6 +75,7 @@ class ChatAgent():
                 continue
 
             id, username, title = group_item[0:3]
+            group_city = group_item[4]
             logger.info(f"Get members for group {id},{username},{title}")
             # TODO: 这里不知道为什么，先 get_entity 可以减少 get_participants 失败的情况
             try:
@@ -96,18 +116,7 @@ class ChatAgent():
                 continue
 
             for member in members:
-                chat_names = self.process_user(member)
-                if not chat_names:
-                    continue
-
-                # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
-                member_text = (member.first_name if member.first_name else "") + " " \
-                                + (member.last_name if member.last_name else "") + " " + about
-                member_city = self.group_agent.get_city_from_text(member_text, threshold=1)
-                group_city = group_item[4]
-                if member_city == None:
-                    member_city = group_city
-                self.process_chat_names(chat_names, member_city)
+                self.process_user(member, group_city)
 
     # 获取群组消息，从群组消息中获取group或channel
     def get_group_messages(self) -> None:
@@ -136,8 +145,50 @@ class ChatAgent():
                 f.close()
             '''
 
-    def process_chat_names(self, chat_names: list, context_city: str) -> None:
-        logger.info(f"Processing chat names {chat_names} from {context_city}")
+    def process_user(self, user: User, context_city: str):
+        # 过滤bot、广告号、已经爬过的用户，减少TG请求
+        # TODO: 可能用户信息会更新，需要重新爬取
+        if user.bot:
+            return None
+        if filter_entity_by_title(user.first_name) or filter_entity_by_title(user.last_name):
+            logger.info(f"Filter user {user.username}{user.first_name},{user.last_name}")
+            return None
+        if user.first_name == "" and user.last_name == "" and user.username == "":
+            return None
+        if self.user_model.does_user_exist(user.id):
+            return None
+
+        # 获取用户的info
+        try:
+            full_member = self.client(GetFullUserRequest(user))
+        except Exception as e:
+            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
+            return None
+
+        about = full_member.full_user.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
+        if filter_entity_by_info(about):
+            return None
+
+        if not self.user_model.does_user_exist(user.id):
+            self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
+            logger.info(f"Add new user {user.id},{user.username} to db")
+
+        # 从info中获取新的群组或频道
+        chat_names = find_channel(about)
+        if len(chat_names) < 1:
+            return None
+
+        # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
+        user_text = (user.first_name if user.first_name else "") + " " \
+                        + (user.last_name if user.last_name else "") + " " + about
+        user_city = self.group_agent.get_city_from_text(user_text, threshold=1)
+        if user_city == None:
+            user_city = context_city
+        logger.info(f"Processing chat names {chat_names} from {user_city}")
+
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
@@ -146,7 +197,7 @@ class ChatAgent():
                 continue
             processed_chat_names[chat_name] = 1
 
-            # TODO: 加入 private chat 怎么处理？
+            # TODO: private chat 怎么处理？
             if chat_name.startswith("+"):
                 #self.join_private_chat(chat_name)
                 continue
@@ -166,9 +217,9 @@ class ChatAgent():
                 self.group_agent.process_group(chat)
             # 如果是 Channel
             else:
-                self.process_channel(chat, context_city)
+                self.process_channel(chat, user_city)
 
-    def process_channel(self, channel: Channel, context_city: str = ''):
+    def process_channel(self, channel: Channel, context_city: str):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
         if filter_entity_by_title(channel.title):
@@ -245,48 +296,18 @@ class ChatAgent():
                 self.process_message(channel, context_city, message_text)
         return None
 
-    def process_user(self, user: User):
-        # 过滤bot、广告号、已经爬过的用户，减少TG请求
-        # TODO: 可能用户信息会更新，需要重新爬取
-        if user.bot:
-            return None
-        if filter_entity_by_title(user.first_name) or filter_entity_by_title(user.last_name):
-            logger.info(f"Filter user {user.username}{user.first_name},{user.last_name}")
-            return None
-        if user.first_name == "" and user.last_name == "" and user.username == "":
-            return None
-        if self.user_model.does_user_exist(user.id):
-            return None
-
-        # 获取用户的info
-        try:
-            full_member = self.client(GetFullUserRequest(user))
-        except Exception as e:
-            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
-            return None
-        
-        about = full_member.full_user.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
-        if filter_entity_by_info(about):
-            return None
-
-        if not self.user_model.does_user_exist(user.id):
-            self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
-            logger.info(f"Add new user {user.id},{user.username} to db")
-
-        # 从info中获取新的群组或频道
-        chat_names = find_channel(about)
-        if len(chat_names) < 1:
-            return None
-        return chat_names
-
     def process_message(self, channel: Channel, context_city: str, message_text: str):
         chat_names = find_channel(message_text)
         if len(chat_names) < 1:
             return
-        logger.info(f"Process message {chat_names}")  
+        logger.info(f"Process message {chat_names}")
+
+        message_tokens = list(jieba.cut(message_text))
+        filtered_tokens = [word for word in message_tokens if word not in self.stop_words]
+        preprocessed_texts = [' ' . join(filtered_tokens)]
+        transformed_texts = self.classifier_vectorizer.transform(preprocessed_texts)
+        message_type = self.classifier_model.predict(transformed_texts)[0]
+        logger.info(f"Message {message_text} type {message_type}")
 
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
@@ -299,7 +320,7 @@ class ChatAgent():
                 logger.info(f"Ignore self username {chat_name}")
                 continue
 
-            # TODO: 加入 private chat 怎么处理？
+            # TODO: private chat 怎么处理？
             if chat_name.startswith("+"):
                 #self.join_private_chat(chat_name)
                 continue
@@ -312,11 +333,8 @@ class ChatAgent():
 
             # 如果是 User
             if isinstance(chat, User):
-                chat_names = self.process_user(chat)
                 logger.info(f"----111 {chat_names}")
-                if not chat_names:
-                    continue
-                self.process_chat_names(chat_names, context_city)
+                self.process_user(chat, context_city)
             # 如果是 Group
             elif chat.megagroup == True:
                 logger.info(f"----222 {chat_names}")

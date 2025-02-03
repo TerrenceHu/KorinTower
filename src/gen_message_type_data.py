@@ -1,20 +1,30 @@
 import json
+from http import HTTPStatus
+from loguru import logger
+
 import dashscope
 from utils.chats import *
 
+logger.add(
+    "kt.log",
+    level="INFO",
+    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
+    encoding="utf-8"
+)
 
 def main() -> None:
     feedback_prompt_template_file = 'config/feedback_prompt_template.txt'
     try:
         feedback_prompt_template = read_prompt_template(feedback_prompt_template_file)
     except FileNotFoundError as e:
-        print(f"Prompt template file not found: {feedback_prompt_template_file}")
+        logger.error(f"Prompt template file not found: {feedback_prompt_template_file}")
+        return
 
     f = open("channel_messages.csv")
     for line in f:
         columns = line.strip().split('\t')
         if len(columns) < 9:
-            print("Invalid line:", line)
+            logger.error("Invalid line:", line)
             continue
         message = columns[2]
         # 读取prompt模板文件
@@ -31,17 +41,23 @@ def main() -> None:
                     result_format='message',
                     temperature=0.1
                 )
-            #print(message)
-            #print(response)
         except Exception as e:
-            print(f"LLM parse type error for {message}: {e}")
+            logger.error(f"LLM parse feedback error for {message}: {e}")
+            continue
 
+        if response.status_code != HTTPStatus.OK:
+            logger.error(f"LLM parse feedback wrong code for {message}: {response}")
+            continue
+        feedback_data = clean_json_string(response.output.choices[0].message.content)
+        if feedback_data is None or not feedback_data:
+            logger.error(f"LLM response empty for {message}")
+            continue
         try:
-            feedback_data = clean_json_string(response.output.choices[0].message.content)
             feedback = json.loads(feedback_data)
             feedback_type = feedback.get("type")
             print(f"{message}\t{feedback_type}")
         except Exception as e:
+            logger.error(f"LLM feedback response error for {message}: {e}")
             continue
 
 if __name__ == "__main__":

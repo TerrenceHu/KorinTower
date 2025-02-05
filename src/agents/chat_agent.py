@@ -118,7 +118,7 @@ class ChatAgent():
             for member in members:
                 self.process_user(member, group_city)
 
-    # 获取群组消息，从群组消息中获取group或channel
+    # 获取群组消息，从群组消息中获取 group 或 channel
     def get_group_messages(self) -> None:
         for id, name in self.group_model.get_all_groups():
             today = datetime(today_date.year, today_date.month, today_date.day, tzinfo=pytz.utc)
@@ -158,17 +158,8 @@ class ChatAgent():
         if self.user_model.does_user_exist(user.id):
             return None
 
-        # 获取用户的info
-        try:
-            full_member = self.client(GetFullUserRequest(user))
-        except Exception as e:
-            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
-            return None
-
-        about = full_member.full_user.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        # 根据 about 再次过滤广告号，广告号没有价值且处理麻烦
+        # 获取用户的 info，并根据 info 再次过滤广告号
+        about = self.get_user_about(user)
         if filter_entity_by_info(about):
             return None
 
@@ -176,50 +167,25 @@ class ChatAgent():
             self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
             logger.info(f"Add new user {user.id},{user.username} to db")
 
-        # 从info中获取新的群组或频道
-        chat_names = find_channel(about)
-        if len(chat_names) < 1:
-            return None
-
         # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
         user_text = (user.first_name if user.first_name else "") + " " \
                         + (user.last_name if user.last_name else "") + " " + about
         user_city = self.group_agent.get_city_from_text(user_text, threshold=1)
         if user_city == None:
             user_city = context_city
-        logger.info(f"Processing chat names {chat_names} from {user_city}")
 
-        for chat_name in chat_names:
-            if chat_name.lower().endswith("bot"):
-                continue
-            if chat_name in processed_chat_names:
-                logger.info(f"Already checked chat {chat_name}")
-                continue
-            processed_chat_names[chat_name] = 1
+        user_chats, group_chats, channel_chats = self.get_chats_from(about)
+        if group_chats:
+            for group_chat in group_chats:
+                self.group_agent.process_group(group_chat)
+        if channel_chats:
+            for channel_chat in channel_chats:
+                if not self.user_model.is_channel_on_user(user.id, channel_chat.id):
+                    self.user_model.add_channel_on_user(user.id, channel_chat.id, today_date)
+                    logger.info(f"Add channel {channel_chat.id} on {user.id}")
+                self.process_channel(channel_chat, user_city, user)
 
-            # TODO: private chat 怎么处理？
-            if chat_name.startswith("+"):
-                #self.join_private_chat(chat_name)
-                continue
-
-            try:
-                chat = self.client.get_entity(chat_name)
-            except Exception as e:
-                logger.error(f"Failed to get_entity {chat_name}: {e}")
-                continue
-
-            # 过滤 User
-            if isinstance(chat, User):
-                logger.info(f"Ignore chat {chat_name} as user")
-                continue
-            # 如果是 Group
-            if chat.megagroup == True:
-                self.group_agent.process_group(chat)
-            # 如果是 Channel
-            else:
-                self.process_channel(chat, user_city)
-
-    def process_channel(self, channel: Channel, context_city: str):
+    def process_channel(self, channel: Channel, context_city: str, user: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
         if filter_entity_by_title(channel.title):
@@ -235,72 +201,108 @@ class ChatAgent():
                                                   channel.participants_count, today_date)
                 logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
             # 解析3次及以上仍然失败，就不再解析了
-            if channel_item[4] <= 0 and channel_item[5] >= 3:
+            if channel_item[5] <= 0 and channel_item[6] >= 3:
                 return None
             # TODO: 如果解析成功过，就不再解析了
-            if channel_item[4] > 0:
-                cur_teacher = self.teacher_model.get_teacher_by_id(channel.id)
+            if channel_item[5] > 0:
+                cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
                 if cur_teacher:
                     return cur_teacher
                 else:
                     return None
-        else:
-            self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                       channel.participants_count, today_date)
-            logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
+
+        # 获取 channel 的 info，并根据 info 再次过滤广告号
+        channel_about = self.channel_agent.get_channel_about(channel)
+        if filter_entity_by_info(channel_about):
+            return None
+        self.channel_model.add_channel(channel.id, channel.username, channel.title,
+                                       channel.participants_count, channel_about, today_date)
+        logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息
         pinned_messages, candidate_messages = self.channel_agent.get_channel_messages(channel)
-        #for message in pinned_messages:
-        #    logger.info(f"---{message}")
-        #for message in candidate_messages:
-        #    logger.info(f"==={message}")
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Empty messages of channel {channel.id}")
             return None
 
-        # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
-        prompt_messages = []
-        prompt_len = 0
-        for message_text in pinned_messages:
-            if prompt_len >= 3000:
-                break
-            prompt_messages.append(message_text)
-            prompt_len += len(message_text)
-        for message_text in candidate_messages:
-            if prompt_len >= 3000:
-                break
-            # 太长的消息不加入prompt
-            if len(message_text) > 1000:
-                continue
-            prompt_messages.append(message_text)
-            prompt_len += len(message_text)
-
-        prompt_content = ";".join(prompt_messages)
+        prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages, candidate_messages)
         if prompt_content == "":
             return None
 
         self.channel_model.increment_retries(channel.id)
         # 调用 LLM 判断 channel 类型
-        channel_type = self.channel_agent.llm_judge_type(prompt_content)
+        channel_type = self.channel_agent.llm_judge_type(prompt_content )
         logger.info(f"Channel {channel.id},{channel.username},{channel.title} is type {channel_type}")
         if channel_type != 0:
             self.channel_model.update_channel_type(channel.id, channel_type)
 
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
-            return self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
+            # 从 info 中获取 channel 归属的 user
+            if user == None:
+                chat_names = find_chatnames(channel_about)
+                logger.info(f"Fetch user from chat names {chat_names} in channel about")
+                if len(chat_names) > 0:
+                    for chat_name in chat_names:
+                        if chat_name.lower().endswith("bot"):
+                            continue
+                        try:
+                            chat = self.client.get_entity(chat_name)
+                        except Exception as e:
+                            logger.error(f"Failed to get_entity {chat_name}: {e}")
+                            continue
+                        # 判断 channnel 是否能挂接到这个 user 上
+                        if isinstance(chat, User):
+                            user_about = self.get_user_about(chat)
+                            if filter_entity_by_info(user_about):
+                                continue
+                            _, _, channel_chats = self.get_chats_from(user_about)
+                            if channel_chats:
+                                for channel_chat in channel_chats:
+                                    if channel.username == channel_chat.username:
+                                        user = chat
+                if user == None:
+                    logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
+                    return None
+
+            if not self.user_model.is_channel_on_user(user.id, channel.id):
+                self.user_model.add_channel_on_user(user.id, channel.id, today_date)
+                logger.info(f"Add channel {channel.id} on user {user.id},{user.username}")
+
+            teacher_info = self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
+            if teacher_info:
+                logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
+
+            if self.teacher_model.does_teacher_exist(channel.id):
+                logger.info(f"Already added teacher {channel.id},{channel.username},{user.id},{user.username}")
+            else:
+                name, city, district, age, price, height, weight, measurement, service = \
+                    teacher_info.get("name"), teacher_info.get("city"), teacher_info.get("district"), \
+                        teacher_info.get("age"), teacher_info.get("price"), teacher_info.get("height"), \
+                            teacher_info.get("weight"), teacher_info.get("measurement"), teacher_info.get("service")
+                self.teacher_model.add_teacher(channel.id, channel.username, user.id, user.username,
+                                               name, city, district, age, price,
+                                               height, weight, measurement, service,
+                                               0, today_date)
+                logger.info(f"Add new teacher {channel.id},{channel.username},{user.id},{user.username},{name} to db")
+            return self.teacher_model.get_teacher_by_channel_id(channel.id)
+
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
+            messages_text = ' ' . join(pinned_messages +  candidate_messages)
+            channel_city = self.group_agent.get_city_from_text(messages_text)
+            if channel_city:
+                context_city = channel_city
+            logger.info(f"context_city: {context_city}")
             for message_text in pinned_messages + candidate_messages:
                 self.process_message(channel, context_city, message_text)
         return None
 
     def process_message(self, channel: Channel, context_city: str, message_text: str):
-        chat_names = find_channel(message_text)
+        chat_names = find_chatnames(message_text)
         if len(chat_names) < 1:
             return
-        logger.info(f"Process message {chat_names}")
+        logger.info(f"Process chat names {chat_names} from message")
 
         message_tokens = list(jieba.cut(message_text))
         filtered_tokens = [word for word in message_tokens if word not in self.stop_words]
@@ -333,17 +335,65 @@ class ChatAgent():
 
             # 如果是 User
             if isinstance(chat, User):
-                logger.info(f"----111 {chat_names}")
+                logger.info(f"Chat {chat_name} is a user")
                 self.process_user(chat, context_city)
             # 如果是 Group
             elif chat.megagroup == True:
-                logger.info(f"----222 {chat_names}")
+                logger.info(f"Chat {chat_name} is a group")
                 self.group_agent.process_group(chat)
-                logger.info(f"Get new group {chat_name} from {channel.id},{channel.username},{channel.title}")
             # 如果是 Channel
             else:
-                logger.info(f"----333 {chat_names}")
+                logger.info(f"Chat {chat_name} is a channel")
                 result = self.process_channel(chat, context_city)
-                if result:
-                    logger.info(f"Get new teacher {result} from {channel.id},{channel.username},{channel.title}")
-        return
+
+    def get_user_about(self, user: User):
+        try:
+            full_member = self.client(GetFullUserRequest(user))
+        except Exception as e:
+            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
+            return None
+        about = full_member.full_user.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        return about
+
+    # 获取文本中 user、group 和 channel
+    def get_chats_from(self, input_text: str):
+        chat_names = find_chatnames(input_text)
+        if len(chat_names) < 1:
+            return None, None, None
+
+        logger.info(f"Processing chat names {chat_names}")
+        user_chats, group_chats, channel_chats = [], [], []
+        for chat_name in chat_names:
+            if chat_name.lower().endswith("bot"):
+                continue
+            if chat_name in processed_chat_names:
+                logger.info(f"Already checked chat {chat_name}")
+                continue
+            processed_chat_names[chat_name] = 1
+
+            # TODO: private chat 怎么处理？
+            if chat_name.startswith("+"):
+                #self.join_private_chat(chat_name)
+                continue
+
+            try:
+                chat = self.client.get_entity(chat_name)
+            except Exception as e:
+                logger.error(f"Failed to get_entity {chat_name}: {e}")
+                continue
+
+            # 如果是 User
+            if isinstance(chat, User):
+                logger.info(f"Chat {chat_name} is a user")
+                user_chats.append(chat)
+            # 如果是 Group
+            elif chat.megagroup == True:
+                logger.info(f"Chat {chat_name} is a group")
+                group_chats.append(chat)
+            # 如果是 Channel
+            else:
+                logger.info(f"Chat {chat_name} is a channel")
+                channel_chats.append(chat)
+        return user_chats, group_chats, channel_chats

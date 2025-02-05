@@ -1,14 +1,14 @@
 import os, re
 
-def find_channel(about):
-    pattern1 = r't\.me/([\w+-]+)'
-    pattern2 = r'@([\w_]+)'
+def find_chatnames(about):
+    pattern1 = r'@([\w_]+)'
+    pattern2 = r't\.me/([\w+-]+)'
     
     matches1 = re.findall(pattern1, str(about))
     matches2 = re.findall(pattern2, str(about))
     matches = matches1 + matches2
     
-    return matches
+    return list(set(matches))
 
 def clean_json_string(data: str) -> str:
     # 使用正则表达式匹配第一个 { 和最后一个 }

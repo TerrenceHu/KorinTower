@@ -21,15 +21,15 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_channel(self, id: int, username: str, title: str, participants_count: int, updated_on: date):
+    def add_channel(self, id: int, username: str, title: str, participants_count: int, about: str, updated_on: date):
         """
         添加一个新的 channel 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, participants_count, updated_on)
-        VALUES (%s, %s, %s, %s, %s);
+        INSERT INTO channels (id, username, title, participants_count, about, updated_on)
+        VALUES (%s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, participants_count, updated_on)
+        values = (id, username, title, participants_count, about, updated_on)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 

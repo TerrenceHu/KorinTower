@@ -9,10 +9,10 @@ import dashscope
 
 from telethon.sync import TelegramClient
 from telethon.tl.types import Channel, ChannelForbidden, MessageMediaPhoto
+from telethon.tl.functions.channels import GetFullChannelRequest
 
 from utils.chats import *
 from models.channel_model import ChannelModel
-from models.teacher_model import TeacherModel
 
 
 today_date = date.today()
@@ -26,8 +26,6 @@ class ChannelAgent():
         self.db_password = config.get('DATABASE', 'db_password')
         self.db_database = config.get('DATABASE', 'db_database')
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
-                                          password=self.db_password, database=self.db_database)
-        self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
 
         self.media_path = config.get('APPLICATION', 'media_path')
@@ -44,27 +42,6 @@ class ChannelAgent():
             self.info_prompt_template = read_prompt_template(info_prompt_template_file)
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
-
-    def parse_photo_text(self, media_url, channel_id, message_id):
-        file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")
-        try:
-            self.client.download_media(media_url, file_name)
-            ocr_results = self.ocr.ocr(file_name, cls=False)
-        except Exception as e:
-            logger.error(f"Download or OCR error for {channel_id},{message_id}: {e}")
-            return None
-
-        photo_text_list = []
-        for ocr_result in ocr_results:
-            if ocr_result == None:
-                break
-            for line in ocr_result:
-                photo_text_list.append(line[-1][0])
-
-        photo_text = None
-        if len(photo_text_list) > 0:
-            photo_text = ' '.join(photo_text_list)
-        return photo_text
 
     def get_channel_messages(self, channel: Channel):
         # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
@@ -110,6 +87,25 @@ class ChannelAgent():
             pinned_messages.extend(class_messages)
 
         return pinned_messages, candidate_messages
+
+    # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
+    def get_prompt_from_messages(self, pinned_messages, candidate_messages):
+        prompt_messages = []
+        prompt_len = 0
+        for message_text in pinned_messages:
+            prompt_messages.append(message_text)
+            prompt_len += len(message_text)
+            if prompt_len >= 3000:
+                break
+        for message_text in candidate_messages:
+            # 太长的消息不加入prompt
+            if len(message_text) > 1000:
+                continue
+            prompt_messages.append(message_text)
+            prompt_len += len(message_text)
+            if prompt_len >= 3000:
+                break
+        return ";" . join(prompt_messages)
 
     # 调用 LLM 判断 channel 类型：0-初始值，-1-失败，1-按摩师，2-导航，100-其他
     def llm_judge_type(self, content: str) -> int:
@@ -218,21 +214,37 @@ class ChannelAgent():
         except Exception as e:
             logger.error(f"LLM response error for {channel.id},{channel.username},{channel.title}: {e}")
             return None
-        logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {info}")
+        return info
 
-        if self.teacher_model.does_teacher_exist(channel.id):
-            logger.info(f"Already added teacher {channel.id},{channel.username}")
-        else:
-            name, city, district, age, price, height, weight, measurement, service = \
-                info.get("name"), info.get("city"), info.get("district"), info.get("age"), info.get("price"), \
-                info.get("height"), info.get("weight"), info.get("measurement"), info.get("service")
-            self.teacher_model.add_teacher(channel.id, channel.username,
-                                           name, city, district, age, price,
-                                           height, weight, measurement, service,
-                                           0, today_date)
-            logger.info(f"Add new teacher {channel.id},{channel.username},{name} to db")
-        cur_teacher = self.teacher_model.get_teacher_by_id(channel.id)
-        if cur_teacher:
-            return cur_teacher
-        else:
+    def get_channel_about(self, channel: Channel):
+        try:
+            full_channel = self.client(GetFullChannelRequest(channel))
+        except Exception as e:
+            logger.error(f"Failed to GetFullChannelRequest {channel.id},{channel.username}: {e}")
             return None
+        
+        about = full_channel.full_chat.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        return about
+
+    def parse_photo_text(self, media_url, channel_id, message_id):
+        file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")
+        try:
+            self.client.download_media(media_url, file_name)
+            ocr_results = self.ocr.ocr(file_name, cls=False)
+        except Exception as e:
+            logger.error(f"Download or OCR error for {channel_id},{message_id}: {e}")
+            return None
+
+        photo_text_list = []
+        for ocr_result in ocr_results:
+            if ocr_result == None:
+                break
+            for line in ocr_result:
+                photo_text_list.append(line[-1][0])
+
+        photo_text = None
+        if len(photo_text_list) > 0:
+            photo_text = ' '.join(photo_text_list)
+        return photo_text

@@ -13,6 +13,19 @@ ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_general_ci;
 
+DROP TABLE IF EXISTS kt.user_channels;
+CREATE TABLE kt.user_channels (
+	user_id BIGINT NOT NULL,
+	channel_id BIGINT NOT NULL,
+	updated_on DATE,
+	PRIMARY KEY (user_id, channel_id),
+	INDEX idx_user_id (user_id),
+	INDEX idx_channel_id (channel_id),
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
+
 --------------------------------
 -- groups
 --------------------------------
@@ -39,10 +52,11 @@ CREATE TABLE kt.channels (
 	username VARCHAR(100),
 	title VARCHAR(255) NOT NULL,
 	participants_count BIGINT,
+	about VARCHAR(255),
 	type INT DEFAULT 0,
 	retries INT DEFAULT 0,
 	status INT DEFAULT 0,
-	updated_on DATE,
+	updated_on DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -70,8 +84,10 @@ COLLATE=utf8mb4_general_ci;
 --------------------------------
 DROP TABLE IF EXISTS kt.teachers;
 CREATE TABLE kt.teachers (
-	id BIGINT PRIMARY KEY,
-	username VARCHAR(100),
+	channel_id BIGINT NOT NULL,
+	channel_username VARCHAR(100),
+	user_id BIGINT NOT NULL,
+	user_username VARCHAR(100),
 	name VARCHAR(100),
 	city VARCHAR(100),
 	district VARCHAR(100),
@@ -82,7 +98,10 @@ CREATE TABLE kt.teachers (
 	measurement VARCHAR(100),
 	service VARCHAR(255),
 	status INT DEFAULT 0,
-	updated_on DATE
+	updated_on DATE,
+	PRIMARY KEY (user_id, channel_id),
+	INDEX idx_user_id (user_id),
+	INDEX idx_channel_id (channel_id)
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

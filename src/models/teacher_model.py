@@ -1,5 +1,5 @@
 from loguru import logger
-from datetime import date, datetime
+from datetime import date
 
 import mysql.connector
 from mysql.connector import Error
@@ -20,25 +20,32 @@ class TeacherModel:
             self.cursor = self.connection.cursor()
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
-    def add_teacher(self, id: int, username: str, name: str, city: str, district: str, age: str, price: str,
-                    height: str, weight: str, measurement: str, service: str, status: int, updated_on: date):
+
+    def add_teacher(self, channel_id: int, channel_username: str, user_id: int, user_username: str,
+                    name: str, city: str, district: str, age: str, price: str,
+                    height: str, weight: str, measurement: str, service: str,
+                    status: int, updated_on: date):
         """
         添加一个新的 teacher 记录
         """
         query = '''
-        INSERT INTO teachers (id, username, name, city, district, age, price, height, weight, measurement, service, status, updated_on)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        INSERT INTO teachers (
+            channel_id, channel_username, user_id, user_username,
+            name, city, district, age, price, height, weight,
+            measurement, service, status, updated_on
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username, name, city, district, age, price, height, weight, measurement, service, status, updated_on)
+        values = (channel_id, channel_username, user_id, user_username,
+                  name, city, district, age, price, height, weight, measurement, service, status, updated_on)
         if not self._execute_query(query, values):
-            logger.error(f"Error adding teacher {id},{username},{name}")
+            logger.error(f"Error adding teacher {channel_id},{channel_username},{user_id},{user_username},{name}")
 
-    def does_teacher_exist(self, id) -> bool:
+    def does_teacher_exist(self, channel_id) -> bool:
         """
         检查 teacher 是否存在于 teachers 表中
         """
-        query = "SELECT EXISTS(SELECT 1 FROM teachers WHERE id = %s LIMIT 1)"
-        values = (id,)
+        query = "SELECT EXISTS(SELECT 1 FROM teachers WHERE channel_id = %s LIMIT 1)"
+        values = (channel_id,)
         result = self._fetch_one(query, values)
         if result is None:
             return False
@@ -56,10 +63,10 @@ class TeacherModel:
             logger.error(f"Error retrieving all teachers: {e}")
             return []
         
-    def get_teacher_by_id(self, id):
-        """Retrieve a teacher by ID."""
-        select_query = "SELECT * FROM teachers WHERE id = %s;"
-        values = (id,)
+    def get_teacher_by_channel_id(self, channel_id):
+        """Retrieve a teacher by channel id"""
+        select_query = "SELECT * FROM teachers WHERE channel_id = %s;"
+        values = (channel_id,)
         result = self._fetch_one(select_query, values)
         return result
 

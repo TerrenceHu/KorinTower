@@ -272,20 +272,19 @@ class ChatAgent():
             teacher_info = self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
                 logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
-
-            if self.teacher_model.does_teacher_exist(channel.id):
-                logger.info(f"Already added teacher {channel.id},{channel.username},{user.id},{user.username}")
-            else:
-                name, city, district, age, price, height, weight, measurement, service = \
-                    teacher_info.get("name"), teacher_info.get("city"), teacher_info.get("district"), \
-                        teacher_info.get("age"), teacher_info.get("price"), teacher_info.get("height"), \
-                            teacher_info.get("weight"), teacher_info.get("measurement"), teacher_info.get("service")
-                self.teacher_model.add_teacher(channel.id, channel.username, user.id, user.username,
-                                               name, city, district, age, price,
-                                               height, weight, measurement, service,
-                                               0, today_date)
-                logger.info(f"Add new teacher {channel.id},{channel.username},{user.id},{user.username},{name} to db")
-            return self.teacher_model.get_teacher_by_channel_id(channel.id)
+                if self.teacher_model.does_teacher_exist(channel.id):
+                    logger.info(f"Already added teacher {channel.id},{channel.username},{user.id},{user.username}")
+                else:
+                    name, city, district, age, price, height, weight, measurement, service = \
+                        teacher_info.get("name"), teacher_info.get("city"), teacher_info.get("district"), \
+                            teacher_info.get("age"), teacher_info.get("price"), teacher_info.get("height"), \
+                                teacher_info.get("weight"), teacher_info.get("measurement"), teacher_info.get("service")
+                    self.teacher_model.add_teacher(channel.id, channel.username, user.id, user.username,
+                                                   name, city, district, age, price,
+                                                   height, weight, measurement, service,
+                                                   0, today_date)
+                    logger.info(f"Add new teacher {channel.id},{channel.username},{user.id},{user.username},{name} to db")
+                return self.teacher_model.get_teacher_by_channel_id(channel.id)
 
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:

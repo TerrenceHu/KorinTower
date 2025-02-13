@@ -3,7 +3,7 @@ from loguru import logger
 import joblib
 import jieba
 
-class MessageClassifier:
+class TextProcessor:
     def __init__(self, config: ConfigParser):
         # 加载停用词表
         stopwords_filename = config.get('MODEL', 'stopwords_filename')
@@ -25,7 +25,7 @@ class MessageClassifier:
         except Exception as e:
             logger.error(f"Load message classifier model or vectorizer error: {e}")
 
-    def classify(self, message_text: str) -> int:
+    def predict(self, message_text: str) -> int:
         message_tokens = list(jieba.cut(message_text))
         filtered_tokens = [word for word in message_tokens if word not in self.stop_words]
         preprocessed_texts = [' '.join(filtered_tokens)]
@@ -33,3 +33,6 @@ class MessageClassifier:
         message_type = self.classifier_model.predict(transformed_texts)[0]
 
         return message_type
+    
+    def segment(self, text: str) -> list:
+        return jieba.cut(text)

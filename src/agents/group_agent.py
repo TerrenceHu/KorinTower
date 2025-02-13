@@ -2,24 +2,22 @@ import pytz
 from datetime import date, datetime, timedelta
 from configparser import ConfigParser
 from loguru import logger
-import jieba
 
 from telethon.sync import TelegramClient
-from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.tl.types import User, Channel, ChannelForbidden
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 
 from globals import *
-from utils.chats import *
+from utils.chat_utils import ChatUtils
+
 from agents.channel_agent import ChannelAgent
-from models.user_model import UserModel
 from models.group_model import GroupModel
 from models.channel_model import ChannelModel
+from models.user_model import UserModel
 from models.teacher_model import TeacherModel
-from models.district_model import DistrictModel
-from algorithms.message_classifier import MessageClassifier
+from algorithms.text_processor import TextProcessor
 
 today_date = date.today()
 
@@ -33,29 +31,18 @@ class GroupAgent():
         self.db_user = config.get('DATABASE', 'db_user')
         self.db_password = config.get('DATABASE', 'db_password')
         self.db_database = config.get('DATABASE', 'db_database')
-        self.user_model = UserModel(host=self.db_host, user=self.db_user,
-                                    password=self.db_password, database=self.db_database)
         self.group_model = GroupModel(host=self.db_host, user=self.db_user,
                                       password=self.db_password, database=self.db_database)
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
+        self.user_model = UserModel(host=self.db_host, user=self.db_user,
+                                    password=self.db_password, database=self.db_database)
         self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
-        self.district_model = DistrictModel(host=self.db_host, user=self.db_user,
-                                          password=self.db_password, database=self.db_database)
-        
         # 消息分类器
-        self.message_classifier = MessageClassifier(config)
-
-        # 获取所有城市
-        self.all_cities = {}
-        for city in self.district_model.get_all_cities():
-            city_id = city[0]
-            city_name = city[1].rstrip("市")
-            self.all_cities[city_name] = {}
-            for district in self.district_model.get_districts_of_city(city_id):
-                district_name = district[1]
-                self.all_cities[city_name][district_name] = 0
+        self.text_processor = TextProcessor(config)
+        # chat 相关的工具
+        self.chat_utils = ChatUtils()
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
@@ -148,7 +135,8 @@ class GroupAgent():
         # TODO: 可能用户信息会更新，需要重新爬取
         if user.bot:
             return None
-        if filter_entity_by_title(user.first_name) or filter_entity_by_title(user.last_name):
+        if self.chat_utils.filter_entity_by_title(user.first_name) \
+            or self.chat_utils.filter_entity_by_title(user.last_name):
             logger.info(f"Filter user {user.username}{user.first_name},{user.last_name}")
             return None
         if user.first_name == "" and user.last_name == "" and user.username == "":
@@ -158,21 +146,20 @@ class GroupAgent():
 
         # 获取用户的 info，并根据 info 再次过滤广告号
         about = self.get_user_about(user)
-        if filter_entity_by_info(about):
+        if self.chat_utils.filter_entity_by_info(about):
             return None
 
-        if not self.user_model.does_user_exist(user.id):
-            self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
-            logger.info(f"Add new user {user.id},{user.username} to db")
+        self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
+        logger.info(f"Add new user {user.id},{user.username} to db")
 
         # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
         user_text = (user.first_name if user.first_name else "") + " " \
                         + (user.last_name if user.last_name else "") + " " + about
-        user_city = self.get_city_from_text(user_text, threshold=1)
+        user_city = self.chat_utils.get_city_from_text(user_text, threshold=1)
         if user_city == None:
             user_city = context_city
 
-        user_chats, group_chats, channel_chats = self.get_chats_from(about)
+        user_chats, group_chats, channel_chats = self.chat_utils.get_chats_from(about)
         if group_chats:
             for group_chat in group_chats:
                 self.process_group(group_chat)
@@ -186,7 +173,7 @@ class GroupAgent():
     def process_channel(self, channel: Channel, context_city: str, user: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
-        if filter_entity_by_title(channel.title):
+        if self.chat_utils.filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title}")
             return None
 
@@ -210,8 +197,8 @@ class GroupAgent():
                     return None
 
         # 获取 channel 的 info，并根据 info 再次过滤广告号
-        channel_about = self.channel_agent.get_channel_about(channel)
-        if filter_entity_by_info(channel_about):
+        channel_about = self.chat_utils.get_channel_about(channel)
+        if self.chat_utils.filter_entity_by_info(channel_about):
             return None
         self.channel_model.add_channel(channel.id, channel.username, channel.title,
                                        channel.participants_count, channel_about, today_date)
@@ -238,7 +225,7 @@ class GroupAgent():
         if channel_type == 1:
             # 从 info 中获取 channel 归属的 user
             if user == None:
-                chat_names = find_chatnames(channel_about)
+                chat_names = self.chat_utils.find_chatnames(channel_about)
                 logger.info(f"Fetch user from chat names {chat_names} in channel about")
                 if len(chat_names) > 0:
                     for chat_name in chat_names:
@@ -251,8 +238,8 @@ class GroupAgent():
                             continue
                         # 判断 channnel 是否能挂接到这个 user 上
                         if isinstance(chat, User):
-                            user_about = self.get_user_about(chat)
-                            if filter_entity_by_info(user_about):
+                            user_about = self.chat_utils.get_user_about(chat)
+                            if self.chat_utils.filter_entity_by_info(user_about):
                                 continue
                             _, _, channel_chats = self.get_chats_from(user_about)
                             if channel_chats:
@@ -287,7 +274,7 @@ class GroupAgent():
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
             messages_text = ' ' . join(pinned_messages +  candidate_messages)
-            channel_city = self.get_city_from_text(messages_text)
+            channel_city = self.chat_utils.get_city_from_text(messages_text)
             if channel_city:
                 context_city = channel_city
             logger.info(f"context_city: {context_city}")
@@ -296,12 +283,12 @@ class GroupAgent():
         return None
 
     def process_message(self, channel: Channel, context_city: str, message_text: str):
-        chat_names = find_chatnames(message_text)
+        chat_names = self.chat_utils.find_chatnames(message_text)
         if len(chat_names) < 1:
             return
         logger.info(f"Process chat names {chat_names} from message")
 
-        message_type = self.message_classifier.predict(message_text)
+        message_type = self.text_processor.predict(message_text)
         logger.info(f"Message {message_text} type {message_type}")
 
         for chat_name in chat_names:
@@ -339,72 +326,20 @@ class GroupAgent():
                 logger.info(f"Chat {chat_name} is a channel")
                 result = self.process_channel(chat, context_city)
 
-    def get_user_about(self, user: User):
-        try:
-            full_member = self.client(GetFullUserRequest(user))
-        except Exception as e:
-            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
-            return None
-        about = full_member.full_user.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
-
-    # 获取文本中 user、group 和 channel
-    def get_chats_from(self, input_text: str):
-        chat_names = find_chatnames(input_text)
-        if len(chat_names) < 1:
-            return None, None, None
-
-        logger.info(f"Processing chat names {chat_names}")
-        user_chats, group_chats, channel_chats = [], [], []
-        for chat_name in chat_names:
-            if chat_name.lower().endswith("bot"):
-                continue
-            if chat_name in processed_chat_names:
-                logger.info(f"Already checked chat {chat_name}")
-                continue
-            processed_chat_names[chat_name] = 1
-
-            # TODO: private chat 怎么处理？
-            if chat_name.startswith("+"):
-                #self.join_private_chat(chat_name)
-                continue
-
-            try:
-                chat = self.client.get_entity(chat_name)
-            except Exception as e:
-                logger.error(f"Failed to get_entity {chat_name}: {e}")
-                continue
-
-            # 如果是 User
-            if isinstance(chat, User):
-                logger.info(f"Chat {chat_name} is a user")
-                user_chats.append(chat)
-            # 如果是 Group
-            elif chat.megagroup == True:
-                logger.info(f"Chat {chat_name} is a group")
-                group_chats.append(chat)
-            # 如果是 Channel
-            else:
-                logger.info(f"Chat {chat_name} is a channel")
-                channel_chats.append(chat)
-        return user_chats, group_chats, channel_chats
-
     def process_group(self, group: Channel):
         if isinstance(group, ChannelForbidden):
-            logger.error(f"Group {group.id} is forbidden")
+            logger.warning(f"Group {group.id} is forbidden")
             return
+        
         logger.info(f"Processing group {group.id},{group.username},{group.title}")
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群
         if group.participants_count != None and group.participants_count < 1000:
             logger.info(f"Too few members in group {group.id},{group.username},{group.title}")
             return
-        if filter_group_by_title(group.title):
+        if self.chat_utils.filter_group_by_title(group.title):
             logger.info(f"Filter ad group {group.id},{group.username},{group.title}")
             return
-
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group {group.id},{group.username},{group.title}")
             # group 的 username 和 title 可能会变化，需要更新
@@ -429,10 +364,11 @@ class GroupAgent():
             for member in members:
                 member_names.append(member.first_name)
                 member_names.append(member.last_name)
-            member_city = self.get_city_from_text(' ' . join([ name for name in member_names if name ]))
+            member_names_text = ' ' . join([ name for name in member_names if name ])
+            member_city = self.chat_utils.get_city_from_text(member_names_text, threshold=3)
             if member_city:
                 group_city = member_city
-                logger.info(f"Group {group.id},{group.username},{group.title} in city {member_city} by members")
+                logger.info(f"Group {group.id},{group.username},{group.title} in city {member_city} from members")
 
         # 如果根据群成员无法判断，就获取群消息来判断
         if group_city == None:
@@ -443,42 +379,20 @@ class GroupAgent():
             else:
                 messages_text = ' ' . join([ message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') 
                                  for message in messages if message.message ])
-                message_city = self.get_city_from_text(messages_text)
+                message_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
                 if message_city:
                     group_city = message_city
-                    logger.info(f"Group {group.id},{group.username},{group.title} in city {message_city} by messages")
+                    logger.info(f"Group {group.id},{group.username},{group.title} in city {message_city} from messages")
 
         # 如果根据群成员和群消息都无法判断，就直接根据群组名来判断（群组名可能不可信，所以最后才采用）
         if group_city == None:
-            title_tokens = list(jieba.cut(group.title))
-            for token in title_tokens:
-                for city_name in self.all_cities.keys():
-                    if token == city_name:
-                        group_city = city_name
-            logger.info(f"Group {group.id},{group.username},{group.title} in city {group_city} by title")
+            title_city = self.chat_utils.get_city_from_text(group.title, threshold=1)
+            if title_city:
+                group_city = title_city
+                logger.info(f"Group {group.id},{group.username},{group.title} in city {group_city} from title")
 
         if group_city:
             self.group_model.update_group_city(group.id, group_city)
-
-    def get_city_from_text(self, text, threshold=3) -> str:
-        district_counts = {}
-        for city_name in self.all_cities.keys():
-            district_counts[city_name] = 0
-
-        tokens = [token for token in list(jieba.cut(text)) if token.strip() != ""]
-        for token in tokens:
-            for city_name in self.all_cities.keys():
-                if token == city_name:
-                    district_counts[city_name] += 1
-                for district_name in self.all_cities[city_name]:
-                    if token == district_name:
-                        district_counts[city_name] += 1
-
-        max_city = max(district_counts, key=district_counts.get)
-        max_count = district_counts[max_city]
-        if max_count >= threshold:
-            return max_city
-        return None
 
     # 加入 group
     def join_group(self, chat: Channel) -> bool:

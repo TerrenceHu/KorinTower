@@ -8,10 +8,9 @@ import paddleocr
 import dashscope
 
 from telethon.sync import TelegramClient
-from telethon.tl.types import Channel, ChannelForbidden, MessageMediaPhoto
-from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.types import Channel, MessageMediaPhoto
 
-from utils.chats import *
+from utils.chat_utils import ChatUtils
 from models.channel_model import ChannelModel
 
 
@@ -27,19 +26,21 @@ class ChannelAgent():
         self.db_database = config.get('DATABASE', 'db_database')
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
-
+        # chat 相关的工具
+        self.chat_utils = ChatUtils()
+        # ocr 识别工具
         self.media_path = config.get('APPLICATION', 'media_path')
         self.ocr = paddleocr.PaddleOCR(lang='ch', show_log=False)
 
         type_prompt_template_file = 'config/type_prompt_template.txt'
         try:
-            self.type_prompt_template = read_prompt_template(type_prompt_template_file)
+            self.type_prompt_template = self.chat_utils.read_prompt_template(type_prompt_template_file)
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {type_prompt_template_file}")
 
         info_prompt_template_file = 'config/info_prompt_template.txt'
         try:
-            self.info_prompt_template = read_prompt_template(info_prompt_template_file)
+            self.info_prompt_template = self.chat_utils.read_prompt_template(info_prompt_template_file)
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
@@ -130,8 +131,8 @@ class ChannelAgent():
             return -1
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type wrong code: {response}")
-            system_prompt = self.type_prompt_template % (remove_nsfw_keywords(content))
-            logger.info(remove_nsfw_keywords(content))
+            system_prompt = self.type_prompt_template % (self.chat_utils.remove_nsfw_keywords(content))
+            logger.info(self.chat_utils.remove_nsfw_keywords(content))
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}
@@ -182,8 +183,9 @@ class ChannelAgent():
             return None
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
-            system_prompt = self.info_prompt_template % (title, remove_nsfw_keywords(content))
-            logger.info(remove_nsfw_keywords(content))
+            safe_content = self.chat_utils.remove_nsfw_keywords(content)
+            system_prompt = self.info_prompt_template % (title, safe_content)
+            logger.info(safe_content)
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}
@@ -204,7 +206,7 @@ class ChannelAgent():
                 return None
 
         info_data = response.output.choices[0].message.content
-        info_data = clean_json_string(info_data)
+        info_data = self.chat_utils.clean_json_string(info_data)
         if info_data is None or not info_data:
             logger.error(f"LLM response empty for {channel.id},{channel.username},{channel.title}")
             return None
@@ -215,18 +217,6 @@ class ChannelAgent():
             logger.error(f"LLM response error for {channel.id},{channel.username},{channel.title}: {e}")
             return None
         return info
-
-    def get_channel_about(self, channel: Channel):
-        try:
-            full_channel = self.client(GetFullChannelRequest(channel))
-        except Exception as e:
-            logger.error(f"Failed to GetFullChannelRequest {channel.id},{channel.username}: {e}")
-            return None
-        
-        about = full_channel.full_chat.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
 
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")

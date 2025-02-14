@@ -42,7 +42,7 @@ class GroupAgent():
         # 消息分类器
         self.text_processor = TextProcessor(config)
         # chat 相关的工具
-        self.chat_utils = ChatUtils()
+        self.chat_utils = ChatUtils(client, config)
 
         # 获取所有群组（数据库中纪录的、上次新加入的）、当前对话中的频道
         for dialog in client.get_dialogs():
@@ -145,7 +145,7 @@ class GroupAgent():
             return None
 
         # 获取用户的 info，并根据 info 再次过滤广告号
-        about = self.get_user_about(user)
+        about = self.chat_utils.get_user_about(user)
         if self.chat_utils.filter_entity_by_info(about):
             return None
 
@@ -170,7 +170,7 @@ class GroupAgent():
                     logger.info(f"Add channel {channel_chat.id} on {user.id}")
                 self.process_channel(channel_chat, user_city, user)
 
-    def process_channel(self, channel: Channel, context_city: str, user: User = None):
+    def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
         if self.chat_utils.filter_entity_by_title(channel.title):
@@ -205,7 +205,7 @@ class GroupAgent():
         logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息
-        pinned_messages, candidate_messages = self.channel_agent.get_channel_messages(channel)
+        pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=200, reverse=True)
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Empty messages of channel {channel.id}")
             return None
@@ -224,65 +224,47 @@ class GroupAgent():
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
             # 从 info 中获取 channel 归属的 user
-            if user == None:
-                chat_names = self.chat_utils.find_chatnames(channel_about)
-                logger.info(f"Fetch user from chat names {chat_names} in channel about")
-                if len(chat_names) > 0:
-                    for chat_name in chat_names:
-                        if chat_name.lower().endswith("bot"):
-                            continue
-                        try:
-                            chat = self.client.get_entity(chat_name)
-                        except Exception as e:
-                            logger.error(f"Failed to get_entity {chat_name}: {e}")
-                            continue
-                        # 判断 channnel 是否能挂接到这个 user 上
-                        if isinstance(chat, User):
-                            user_about = self.chat_utils.get_user_about(chat)
-                            if self.chat_utils.filter_entity_by_info(user_about):
-                                continue
-                            _, _, channel_chats = self.get_chats_from(user_about)
-                            if channel_chats:
-                                for channel_chat in channel_chats:
-                                    if channel.username == channel_chat.username:
-                                        user = chat
-                if user == None:
+            if user_of_channel == None:
+                user_of_channel = self.chat_utils.get_user_from_channel(channel, channel_about)
+                if user_of_channel == None:
                     logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
                     return None
 
-            if not self.user_model.is_channel_on_user(user.id, channel.id):
-                self.user_model.add_channel_on_user(user.id, channel.id, today_date)
-                logger.info(f"Add channel {channel.id} on user {user.id},{user.username}")
+            if not self.user_model.is_channel_on_user(user_of_channel.id, channel.id):
+                self.user_model.add_channel_on_user(user_of_channel.id, channel.id, today_date)
+                logger.info(f"Add channel {channel.id},{channel.username} on user {user_of_channel.id},{user_of_channel.username}")
 
             teacher_info = self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
                 logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
                 if self.teacher_model.does_teacher_exist(channel.id):
-                    logger.info(f"Already added teacher {channel.id},{channel.username},{user.id},{user.username}")
+                    logger.info(f"Already added teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username}")
                 else:
                     name, city, district, age, price, height, weight, measurement, service = \
                         teacher_info.get("name"), teacher_info.get("city"), teacher_info.get("district"), \
                             teacher_info.get("age"), teacher_info.get("price"), teacher_info.get("height"), \
                                 teacher_info.get("weight"), teacher_info.get("measurement"), teacher_info.get("service")
-                    self.teacher_model.add_teacher(channel.id, channel.username, user.id, user.username,
+                    self.teacher_model.add_teacher(channel.id, channel.username,
+                                                   user_of_channel.id, user_of_channel.username,
                                                    name, city, district, age, price,
                                                    height, weight, measurement, service,
                                                    0, today_date)
-                    logger.info(f"Add new teacher {channel.id},{channel.username},{user.id},{user.username},{name} to db")
+                    logger.info(f"Add new teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username} to db")
                 return self.teacher_model.get_teacher_by_channel_id(channel.id)
 
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
+            pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=1000)
             messages_text = ' ' . join(pinned_messages +  candidate_messages)
-            channel_city = self.chat_utils.get_city_from_text(messages_text)
+            channel_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
             if channel_city:
                 context_city = channel_city
-            logger.info(f"context_city: {context_city}")
             for message_text in pinned_messages + candidate_messages:
                 self.process_message(channel, context_city, message_text)
         return None
 
     def process_message(self, channel: Channel, context_city: str, message_text: str):
+        logger.info(f"Processing message {message_text} from {channel.id},{channel.username},{context_city}")
         chat_names = self.chat_utils.find_chatnames(message_text)
         if len(chat_names) < 1:
             return

@@ -27,7 +27,7 @@ class ChannelAgent():
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
         # chat 相关的工具
-        self.chat_utils = ChatUtils()
+        self.chat_utils = ChatUtils(client, config)
         # ocr 识别工具
         self.media_path = config.get('APPLICATION', 'media_path')
         self.ocr = paddleocr.PaddleOCR(lang='ch', show_log=False)
@@ -44,10 +44,10 @@ class ChannelAgent():
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
-    def get_channel_messages(self, channel: Channel):
+    def fetch_channel_messages(self, channel: Channel, limit: int, reverse: bool = False):
         # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
         try:
-            messages = self.client.get_messages(channel.id, limit=200, reverse=True)
+            messages = self.client.get_messages(channel.id, limit=limit, reverse=reverse)
         except Exception as e:
             return None, None
 

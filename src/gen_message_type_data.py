@@ -1,9 +1,11 @@
+import sys
 import json
 from http import HTTPStatus
 from loguru import logger
 
 import dashscope
-from utils.chats import *
+from utils.chat_utils import ChatUtils
+
 
 logger.add(
     "kt.log",
@@ -15,12 +17,12 @@ logger.add(
 def main() -> None:
     feedback_prompt_template_file = 'config/feedback_prompt_template.txt'
     try:
-        feedback_prompt_template = read_prompt_template(feedback_prompt_template_file)
+        feedback_prompt_template = ChatUtils.read_prompt_template(feedback_prompt_template_file)
     except FileNotFoundError as e:
         logger.error(f"Prompt template file not found: {feedback_prompt_template_file}")
         return
 
-    f = open("channel_messages.csv")
+    f = open(sys.argv[1])
     for line in f:
         columns = line.strip().split('\t')
         if len(columns) < 9:
@@ -48,7 +50,7 @@ def main() -> None:
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse feedback wrong code for {message}: {response}")
             continue
-        feedback_data = clean_json_string(response.output.choices[0].message.content)
+        feedback_data = ChatUtils.clean_json_string(response.output.choices[0].message.content)
         if feedback_data is None or not feedback_data:
             logger.error(f"LLM response empty for {message}")
             continue

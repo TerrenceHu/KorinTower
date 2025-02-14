@@ -31,6 +31,7 @@ class ChatUtils:
             for district in self.district_model.get_districts_of_city(city_id):
                 district_name = district[1]
                 self.all_cities[city_name][district_name] = 0
+
     # 根据文本判断城市
     def get_city_from_text(self, text, threshold) -> str:
         city_counts = {}
@@ -51,7 +52,31 @@ class ChatUtils:
         if max_count >= threshold:
             return max_city
         return None
-    
+
+    def get_user_about(self, user: User):
+        try:
+            full_member = self.client(GetFullUserRequest(user))
+        except Exception as e:
+            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
+            return None
+
+        about = full_member.full_user.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        return about
+
+    def get_channel_about(self, channel: Channel):
+        try:
+            full_channel = self.client(GetFullChannelRequest(channel))
+        except Exception as e:
+            logger.error(f"Failed to GetFullChannelRequest {channel.id},{channel.username}: {e}")
+            return None
+
+        about = full_channel.full_chat.about
+        if about:
+            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        return about
+
     # 获取文本中 user、group 和 channel
     def get_chats_from(self, input_text: str):
         chat_names = self.find_chatnames(input_text)
@@ -80,41 +105,42 @@ class ChatUtils:
 
             # 如果是 User
             if isinstance(chat, User):
-                logger.info(f"Chat {chat_name} is a user")
                 user_chats.append(chat)
             # 如果是 Group
             elif chat.megagroup == True:
-                logger.info(f"Chat {chat_name} is a group")
                 group_chats.append(chat)
             # 如果是 Channel
             else:
-                logger.info(f"Chat {chat_name} is a channel")
                 channel_chats.append(chat)
         return user_chats, group_chats, channel_chats
 
-    def get_user_about(self, user: User):
-        try:
-            full_member = self.client(GetFullUserRequest(user))
-        except Exception as e:
-            logger.error(f"Failed to GetFullUserRequest {user.id},{user.username}: {e}")
+    def get_user_from_channel(self, channel: Channel, channel_about: str) -> User:
+        chat_names = self.find_chatnames(channel_about)
+        logger.info(f"Fetch user from chat names {chat_names} in {channel_about}")
+        if len(chat_names) < 1:
             return None
-        
-        about = full_member.full_user.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
 
-    def get_channel_about(self, channel: Channel):
-        try:
-            full_channel = self.client(GetFullChannelRequest(channel))
-        except Exception as e:
-            logger.error(f"Failed to GetFullChannelRequest {channel.id},{channel.username}: {e}")
-            return None
-        
-        about = full_channel.full_chat.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
+        channel_user = None
+        for chat_name in chat_names:
+            if chat_name.lower().endswith("bot"):
+                continue
+            try:
+                chat = self.client.get_entity(chat_name)
+            except Exception as e:
+                logger.error(f"Failed to get_entity {chat_name}: {e}")
+                continue
+            # 判断 channnel 是否能挂接到这个 user 上
+            if isinstance(chat, User):
+                user_about = self.get_user_about(chat)
+                if self.filter_entity_by_info(user_about):
+                    continue
+                _, _, channel_chats = self.get_chats_from(user_about)
+                if channel_chats:
+                    for channel_chat in channel_chats:
+                        if channel.username == channel_chat.username:
+                            channel_user = chat
+                            logger.info(f"Got user {chat.id},{chat.username} from channel {channel.id},{channel.username}")
+        return channel_user
 
     @staticmethod
     def find_chatnames(input_text):

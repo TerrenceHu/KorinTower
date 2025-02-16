@@ -11,3 +11,5 @@ awk -F"\t" '{l=length($1); if(l<100) t="L100"; else if(l<200) t="L200"; else if(
 
 head -400 data/messages_type > data/messages_type.train
 tail -107 data/messages_type > data/messages_type.test
+
+python algorithms/message_type_classifier.py

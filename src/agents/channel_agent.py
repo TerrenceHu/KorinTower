@@ -29,7 +29,7 @@ class ChannelAgent():
         # chat 相关的工具
         self.chat_utils = ChatUtils(client, config)
         # ocr 识别工具
-        self.media_path = config.get('APPLICATION', 'media_path')
+        self.media_path = config.get('KT_APP', 'media_path')
         self.ocr = paddleocr.PaddleOCR(lang='ch', show_log=False)
 
         type_prompt_template_file = 'config/type_prompt_template.txt'

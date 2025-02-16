@@ -4,7 +4,7 @@ from loguru import logger
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from agents.chat_agent import ChatAgent
+from agents.group_agent import GroupAgent
 
 
 logger.add(
@@ -17,7 +17,7 @@ logger.add(
 def main() -> None:
     # 读取配置
     config = ConfigParser()
-    config.read('config/config.ini')
+    config.read('config/kt_config.ini')
 
     username = config.get('TG', 'username')
     phone = config.get('TG', 'phone')
@@ -37,9 +37,9 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    chat_agent = ChatAgent(client, config)
-    channel = client.get_entity("wenwenqunfengxiang")
-    teacher = chat_agent.process_channel(channel, '')
+    group_agent = GroupAgent(client, config)
+    channel = client.get_entity("yzbyjy666")
+    teacher = group_agent.process_channel(channel, '')
     print(teacher)
 
     #group_agent = GroupAgent(client, config)

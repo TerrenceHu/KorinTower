@@ -1,5 +1,5 @@
-from loguru import logger
 from configparser import ConfigParser
+from loguru import logger
 
 from telethon.sync import TelegramClient
 from telethon.errors import SessionPasswordNeededError
@@ -16,7 +16,7 @@ logger.add(
 def main() -> None:
     # 读取配置
     config = ConfigParser()
-    config.read('config/config.ini')
+    config.read('config/kt_config.ini')
 
     username = config.get('TG', 'username')
     phone = config.get('TG', 'phone')

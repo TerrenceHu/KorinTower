@@ -8,11 +8,12 @@ import paddleocr
 import dashscope
 
 from telethon.sync import TelegramClient
-from telethon.tl.types import Channel, MessageMediaPhoto
+from telethon.tl.types import User, Channel, MessageMediaPhoto
 
 from utils.chat_utils import ChatUtils
 from models.channel_model import ChannelModel
-
+from models.teacher_model import TeacherModel
+from models.district_model import DistrictModel
 
 today_date = date.today()
 
@@ -26,6 +27,11 @@ class ChannelAgent():
         self.db_database = config.get('DATABASE', 'db_database')
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
+        self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
+        self.district_model = DistrictModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
+        
         # chat 相关的工具
         self.chat_utils = ChatUtils(client, config)
         # ocr 识别工具
@@ -109,7 +115,7 @@ class ChannelAgent():
         return ";" . join(prompt_messages)
 
     # 调用 LLM 判断 channel 类型：0-初始值，-1-失败，1-按摩师，2-导航，100-其他
-    def llm_judge_type(self, content: str) -> int:
+    def llm_judge_channel_type(self, content: str) -> int:
         # 读取prompt模板文件
         system_prompt = self.type_prompt_template % (content)
         messages = [
@@ -162,7 +168,7 @@ class ChannelAgent():
         return 0
 
     # 调用 LLM 获取 channel 信息
-    def get_teacher_info(self, channel: Channel, context_city: str, content: str):
+    def llm_parse_teacher_info(self, channel: Channel, context_city: str, content: str):
         # 读取prompt模板文件
         title = context_city + channel.title
         system_prompt = self.info_prompt_template % (title, content)
@@ -183,7 +189,9 @@ class ChannelAgent():
             return None
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
+            logger.info(content)
             safe_content = self.chat_utils.remove_nsfw_keywords(content)
+            
             system_prompt = self.info_prompt_template % (title, safe_content)
             logger.info(safe_content)
             messages = [
@@ -218,6 +226,27 @@ class ChannelAgent():
             return None
         return info
 
+    def norm_and_add_teacher(self, channel: Channel, user_of_channel: User, teacher_info: dict):
+        name, city, district, age, raw_price, height, weight, measurement, service = (
+                        teacher_info.get("name"),
+                        teacher_info.get("city"),
+                        teacher_info.get("district"),
+                        teacher_info.get("age"),
+                        teacher_info.get("price"),
+                        teacher_info.get("height"),
+                        teacher_info.get("weight"),
+                        teacher_info.get("measurement"),
+                        teacher_info.get("service")
+                    )
+        
+        city_id = self.district_model.get_city_id_by_name(city)
+        district_id = self.district_model.get_district_id_by_name(district, city_id)
+        logger.info(f"{teacher_info}{city_id}{district_id}")
+        
+        self.teacher_model.add_teacher(channel.id, channel.username,
+                                       user_of_channel.id, user_of_channel.username,
+                                       name, city_id, district_id,
+                                       0, today_date)
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")
         try:

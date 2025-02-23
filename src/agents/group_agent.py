@@ -216,39 +216,38 @@ class GroupAgent():
 
         self.channel_model.increment_retries(channel.id)
         # 调用 LLM 判断 channel 类型
-        channel_type = self.channel_agent.llm_judge_type(prompt_content )
+        channel_type = self.channel_agent.llm_judge_channel_type(prompt_content)
         logger.info(f"Channel {channel.id},{channel.username},{channel.title} is type {channel_type}")
         if channel_type != 0:
             self.channel_model.update_channel_type(channel.id, channel_type)
 
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
-            # 从 info 中获取 channel 归属的 user
+            teacher_info = self.channel_agent.llm_parse_teacher_info(channel, context_city, prompt_content)
+            if teacher_info:
+                logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
+            else:
+                logger.error(f"Failed to parse teacher info of channel {channel.id},{channel.username},{channel.title}")
+                return None
+
+            # 从 about 中获取 channel 归属的 user；若失败，再从 channel 内容的联系方式中获取
             if user_of_channel == None:
                 user_of_channel = self.chat_utils.get_user_from_channel(channel, channel_about)
-                if user_of_channel == None:
-                    logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
-                    return None
+            if user_of_channel == None:
+                user_of_channel = self.chat_utils.get_user_from_channel(channel, teacher_info.get("contact"))
+            if user_of_channel == None:
+                logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
+                return None
 
             if not self.user_model.is_channel_on_user(user_of_channel.id, channel.id):
                 self.user_model.add_channel_on_user(user_of_channel.id, channel.id, today_date)
                 logger.info(f"Add channel {channel.id},{channel.username} on user {user_of_channel.id},{user_of_channel.username}")
 
-            teacher_info = self.channel_agent.get_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
-                logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
                 if self.teacher_model.does_teacher_exist(channel.id):
                     logger.info(f"Already added teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username}")
                 else:
-                    name, city, district, age, price, height, weight, measurement, service = \
-                        teacher_info.get("name"), teacher_info.get("city"), teacher_info.get("district"), \
-                            teacher_info.get("age"), teacher_info.get("price"), teacher_info.get("height"), \
-                                teacher_info.get("weight"), teacher_info.get("measurement"), teacher_info.get("service")
-                    self.teacher_model.add_teacher(channel.id, channel.username,
-                                                   user_of_channel.id, user_of_channel.username,
-                                                   name, city, district, age, price,
-                                                   height, weight, measurement, service,
-                                                   0, today_date)
+                    self.channel_agent.norm_and_add_teacher(channel, user_of_channel, teacher_info)
                     logger.info(f"Add new teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username} to db")
                 return self.teacher_model.get_teacher_by_channel_id(channel.id)
 

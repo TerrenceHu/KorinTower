@@ -210,10 +210,11 @@ class ChatUtils:
     def remove_nsfw_keywords(text: str) -> str:
         """从文本中删除指定的关键词"""
         keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"调教", u"耳光", u"鞭打", u"勾引",
-                    u"体位", u"后入", u"女上位", u"69", u"戴套", u"屌感", u"全裸", u"波推", u"漫游", u"丝足",
-                    u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM",
+                    u"体位", u"后入", u"女上位", u"69", u"戴套", u"带套", u"屌感", u"全裸", u"波推", u"漫游",
+                    u"丝足", u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM",
                     u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙", u"双飞",
-                    u"潮吹", u"潮喷", u"强奸"]
+                    u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"潮吹", u"潮喷", u"强奸",
+                    u"颜射", u"乳交", u"舔蛋蛋"]
         # 使用正则表达式匹配关键词，并替换为空字符串
         pattern = re.compile(r'(' + '|'.join(re.escape(keyword) for keyword in keywords) + r')')
         cleaned_text = pattern.sub('', text)

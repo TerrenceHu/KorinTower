@@ -103,17 +103,19 @@ ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
 COLLATE=utf8mb4_general_ci;
 
-DROP TABLE IF EXISTS kt.teacher_info;
-CREATE TABLE kt.teacher_info (
+DROP TABLE IF EXISTS kt.teachers_info;
+CREATE TABLE kt.teachers_info (
     channel_id BIGINT NOT NULL,
 	age VARCHAR(100),
+	price VARCHAR(255),
 	height VARCHAR(100),
 	weight VARCHAR(100),
 	measurement VARCHAR(100),
     service VARCHAR(255),
     PRIMARY KEY (channel_id),
-    FOREIGN KEY (channel_id) REFERENCES kt.teacher(channel_id) ON DELETE CASCADE
+    FOREIGN KEY (channel_id) REFERENCES kt.teachers(channel_id) ON DELETE CASCADE
 );
+
 
 INSERT INTO kt.teachers (channel_id, channel_username, user_id, user_username, name, city_id, district, age, price, height, weight, measurement, service, status, updated_on)
 SELECT channel_id, channel_username, user_id, user_username, name, 518000, district, age, price, height, weight, measurement, service, status, updated_on

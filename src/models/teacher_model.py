@@ -21,24 +21,44 @@ class TeacherModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_teacher(self, channel_id: int, channel_username: str, user_id: int, user_username: str,
-                    name: str, city: str, district: str, age: str, price: str,
-                    height: str, weight: str, measurement: str, service: str,
+    def add_teacher(self, channel_id: int, channel_username: str,
+                    user_id: int, user_username: str,
+                    name: str, city_id: int, district_id: str, price: str, price1: str,
+                    age: str, height: str, weight: str, measurement: str, service: str,
                     status: int, updated_on: date):
+        # 开始事务
+        self.connection.start_transaction()
+
         """
         添加一个新的 teacher 记录
         """
-        query = '''
+        teachers_query = '''
         INSERT INTO teachers (
             channel_id, channel_username, user_id, user_username,
-            name, city, district, age, price, height, weight,
-            measurement, service, status, updated_on
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            name, city_id, district_id, price1p, status, updated_on
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         '''
-        values = (channel_id, channel_username, user_id, user_username,
-                  name, city, district, age, price, height, weight, measurement, service, status, updated_on)
-        if not self._execute_query(query, values):
-            logger.error(f"Error adding teacher {channel_id},{channel_username},{user_id},{user_username},{name}")
+        teachers_values = (channel_id, channel_username, user_id, user_username,
+                           name, city_id, district_id, price1, status, updated_on)
+        if not self._execute_query(teachers_query, teachers_values):
+            logger.error(f"Error adding teacher to teachers table: {channel_id},{channel_username},{user_id},{user_username}")
+            self.connection.rollback()
+            return False
+        
+        teachers_info_query = '''
+        INSERT INTO teachers_info (
+            channel_id, age, price, height, weight, measurement, service
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+        '''
+        teachers_info_values = (channel_id, age, price, height, weight, measurement, service)
+        if not self._execute_query(teachers_info_query, teachers_info_values):
+            logger.error(f"Error adding teacher to teachers_info table: {channel_id},{channel_username},{user_id},{user_username}")
+            self.connection.rollback()
+            return False
+        
+        # 提交事务
+        self.connection.commit()
+        return True
 
     def does_teacher_exist(self, channel_id) -> bool:
         """
@@ -51,22 +71,41 @@ class TeacherModel:
             return False
         return result[0]
 
-    def get_all_teachers(self):
+    def get_effective_teachers_by_city(self, city_id):
         """
-        获取所有 teachers 表中的记录
+        获取某城市中所有 teachers 记录
         """
-        select_query = "SELECT * FROM teachers;"
+        select_query = "SELECT * FROM teachers where status = 1 and city_id = %s"
+        values = (city_id,)
         try:
-            self.cursor.execute(select_query)
+            self.cursor.execute(select_query, values)
             return self.cursor.fetchall()
         except Error as e:
-            logger.error(f"Error retrieving all teachers: {e}")
-            return []
-        
+            logger.error(f"Error retrieving all teachers of city {city_id}: {e}")
+    
+    def get_effective_teachers_by_district(self, district_id):
+        """
+        获取某区域中所有 teachers 记录
+        """
+        select_query = "SELECT * FROM teachers where status = 1 and district_id = %s"
+        values = (district_id,)
+        try:
+            self.cursor.execute(select_query, values)
+            return self.cursor.fetchall()
+        except Error as e:
+            logger.error(f"Error retrieving all teachers of district {district_id}: {e}")
+
     def get_teacher_by_channel_id(self, channel_id):
         """Retrieve a teacher by channel id"""
         select_query = "SELECT * FROM teachers WHERE channel_id = %s;"
         values = (channel_id,)
+        result = self._fetch_one(select_query, values)
+        return result
+    
+    def get_teacher_by_user_username(self, user_username):
+        """Retrieve a teacher by user username"""
+        select_query = "SELECT * FROM teachers WHERE user_username = %s;"
+        values = (user_username,)
         result = self._fetch_one(select_query, values)
         return result
 

@@ -227,12 +227,13 @@ class ChannelAgent():
         return info
 
     def norm_and_add_teacher(self, channel: Channel, user_of_channel: User, teacher_info: dict):
-        name, city, district, age, raw_price, height, weight, measurement, service = (
+        name, city, district, age, price, price1, height, weight, measurement, service = (
                         teacher_info.get("name"),
                         teacher_info.get("city"),
                         teacher_info.get("district"),
                         teacher_info.get("age"),
                         teacher_info.get("price"),
+                        teacher_info.get("price1"),
                         teacher_info.get("height"),
                         teacher_info.get("weight"),
                         teacher_info.get("measurement"),
@@ -241,11 +242,12 @@ class ChannelAgent():
         
         city_id = self.district_model.get_city_id_by_name(city)
         district_id = self.district_model.get_district_id_by_name(district, city_id)
-        logger.info(f"{teacher_info}{city_id}{district_id}")
+        logger.info(f"{teacher_info},{city_id},{district_id}")
         
         self.teacher_model.add_teacher(channel.id, channel.username,
                                        user_of_channel.id, user_of_channel.username,
-                                       name, city_id, district_id,
+                                       name, city_id, district_id, price, price1,
+                                       age, height, weight, measurement, service,
                                        0, today_date)
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")

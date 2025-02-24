@@ -142,6 +142,7 @@ class GroupAgent():
         if user.first_name == "" and user.last_name == "" and user.username == "":
             return None
         if self.user_model.does_user_exist(user.id):
+            logger.info(f"Already added user {user.id},{user.username}")
             return None
 
         # 获取用户的 info，并根据 info 再次过滤广告号
@@ -209,7 +210,6 @@ class GroupAgent():
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Empty messages of channel {channel.id}")
             return None
-
         prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages, candidate_messages)
         if prompt_content == "":
             return None
@@ -223,6 +223,10 @@ class GroupAgent():
 
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
+            # 优先用新的 channel 消息
+            pinned_messages_latest, candidate_messages_latest = self.channel_agent.fetch_channel_messages(channel, limit=200)
+            prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages_latest + pinned_messages,
+                                                                         candidate_messages_latest + candidate_messages)
             teacher_info = self.channel_agent.llm_parse_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
                 logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")

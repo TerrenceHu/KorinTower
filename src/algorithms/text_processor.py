@@ -25,6 +25,7 @@ class TextProcessor:
         except Exception as e:
             logger.error(f"Load message classifier model or vectorizer error: {e}")
 
+    # 类别0：消息不是服务反馈；类别1：消息是正向的服务反馈；类别2：消息是负向的服务反馈
     def predict(self, message_text: str) -> int:
         message_tokens = list(jieba.cut(message_text))
         filtered_tokens = [word for word in message_tokens if word not in self.stop_words]

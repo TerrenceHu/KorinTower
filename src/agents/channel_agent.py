@@ -189,11 +189,12 @@ class ChannelAgent():
             return None
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
+            
             logger.info(content)
             safe_content = self.chat_utils.remove_nsfw_keywords(content)
-            
             system_prompt = self.info_prompt_template % (title, safe_content)
             logger.info(safe_content)
+            
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}
@@ -248,7 +249,7 @@ class ChannelAgent():
                                        user_of_channel.id, user_of_channel.username,
                                        name, city_id, district_id, price, price1,
                                        age, height, weight, measurement, service,
-                                       0, today_date)
+                                       today_date)
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")
         try:

@@ -1,13 +1,10 @@
 from configparser import ConfigParser
 from loguru import logger
-import textwrap
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler, ContextTypes
+from telegram import Update
+from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from bots.student_bot import StudentBot
-from models.district_model import DistrictModel
-
 
 logger.add(
     "logs/bot_student.log",

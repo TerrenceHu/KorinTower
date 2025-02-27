@@ -51,7 +51,6 @@ CREATE TABLE kt.channels (
 	id BIGINT PRIMARY KEY,
 	username VARCHAR(100),
 	title VARCHAR(255) NOT NULL,
-	participants_count BIGINT,
 	about VARCHAR(255),
 	type INT DEFAULT 0,
 	retries INT DEFAULT 0,

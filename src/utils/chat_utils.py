@@ -1,6 +1,7 @@
 import os, re
 from configparser import ConfigParser
 from loguru import logger
+from collections import Counter
 import jieba
 
 from telethon.sync import TelegramClient
@@ -114,9 +115,9 @@ class ChatUtils:
                 channel_chats.append(chat)
         return user_chats, group_chats, channel_chats
 
-    def get_user_from_channel(self, channel: Channel, channel_about: str) -> User:
-        chat_names = self.find_chatnames(channel_about)
-        logger.info(f"Fetch user from chat names {chat_names} in {channel_about}")
+    def get_user_from_text(self, channel: Channel, text: str) -> User:
+        chat_names = self.find_chatnames(text)
+        logger.info(f"Fetch user from chat names {chat_names} in {text}")
         if len(chat_names) < 1:
             return None
 
@@ -140,7 +141,8 @@ class ChatUtils:
                         if channel.username == channel_chat.username:
                             channel_user = chat
                             logger.info(f"Got user {chat.id},{chat.username} from channel {channel.id},{channel.username}")
-        return channel_user
+                            return channel_user
+        return None
 
     @staticmethod
     def find_chatnames(input_text):
@@ -151,7 +153,10 @@ class ChatUtils:
         matches2 = re.findall(pattern2, str(input_text))
         matches = matches1 + matches2
 
-        return list(set(matches))
+        match_counts = Counter(matches)
+        sorted_matches = sorted(match_counts.items(), key=lambda x: x[1], reverse=True)
+
+        return [match[0] for match in sorted_matches]
 
     @staticmethod
     def clean_json_string(data: str) -> str:
@@ -209,12 +214,13 @@ class ChatUtils:
     @staticmethod
     def remove_nsfw_keywords(text: str) -> str:
         """从文本中删除指定的关键词"""
-        keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"调教", u"耳光", u"鞭打", u"勾引",
-                    u"体位", u"后入", u"女上位", u"69", u"戴套", u"带套", u"屌感", u"全裸", u"波推", u"漫游",
-                    u"丝足", u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM",
-                    u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙", u"双飞",
-                    u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"潮吹", u"潮喷", u"强奸",
-                    u"颜射", u"乳交", u"舔蛋蛋"]
+        keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"龟头", u"调教", u"耳光", u"鞭打",
+                    u"体位", u"后入", u"女上位", u"69", u"戴套", u"带套", u"屌感", u"吊感", u"波推", u"漫游",
+                    u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM",
+                    u"丝足", u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙",
+                    u"双飞", u"胸推", u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"口技",
+                    u"勾引", u"全裸", u"私处", u"骚话", u"潮吹", u"潮喷", u"强奸", u"高潮", u"颜射", u"乳交",
+                    u"蛋蛋", u"白虎", u"女上", u"骑乘", u"叫床"]
         # 使用正则表达式匹配关键词，并替换为空字符串
         pattern = re.compile(r'(' + '|'.join(re.escape(keyword) for keyword in keywords) + r')')
         cleaned_text = pattern.sub('', text)

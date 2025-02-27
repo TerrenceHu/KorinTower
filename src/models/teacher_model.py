@@ -25,7 +25,7 @@ class TeacherModel:
                     user_id: int, user_username: str,
                     name: str, city_id: int, district_id: str, price: str, price1: str,
                     age: str, height: str, weight: str, measurement: str, service: str,
-                    status: int, updated_on: date):
+                    updated_on: date):
         # 开始事务
         self.connection.start_transaction()
 
@@ -35,11 +35,11 @@ class TeacherModel:
         teachers_query = '''
         INSERT INTO teachers (
             channel_id, channel_username, user_id, user_username,
-            name, city_id, district_id, price1p, status, updated_on
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+            name, city_id, district_id, price1p, updated_on
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
         '''
         teachers_values = (channel_id, channel_username, user_id, user_username,
-                           name, city_id, district_id, price1, status, updated_on)
+                           name, city_id, district_id, price1, updated_on)
         if not self._execute_query(teachers_query, teachers_values):
             logger.error(f"Error adding teacher to teachers table: {channel_id},{channel_username},{user_id},{user_username}")
             self.connection.rollback()
@@ -75,7 +75,7 @@ class TeacherModel:
         """
         获取某城市中所有 teachers 记录
         """
-        select_query = "SELECT * FROM teachers where status = 1 and city_id = %s"
+        select_query = "SELECT * FROM teachers where status = 0 and city_id = %s"
         values = (city_id,)
         try:
             self.cursor.execute(select_query, values)
@@ -87,7 +87,7 @@ class TeacherModel:
         """
         获取某区域中所有 teachers 记录
         """
-        select_query = "SELECT * FROM teachers where status = 1 and district_id = %s"
+        select_query = "SELECT * FROM teachers where status = 0 and district_id = %s"
         values = (district_id,)
         try:
             self.cursor.execute(select_query, values)
@@ -108,17 +108,6 @@ class TeacherModel:
         values = (user_username,)
         result = self._fetch_one(select_query, values)
         return result
-
-    def update_channel(self, channel_id: int, username: str, title: str,
-                       participants_count: int, updated_on: date):
-        """
-        更新指定频道
-        """
-        update_query = '''
-        UPDATE channels SET username = %s, title = %s, participants_count = %s, updated_on = %s WHERE id = %s;
-        '''
-        values = (username, title, participants_count, updated_on, channel_id)
-        return self._execute_query(update_query, values)
     
     def delete_teacher(self, id: int):
         """

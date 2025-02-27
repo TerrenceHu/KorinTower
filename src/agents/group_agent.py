@@ -177,33 +177,34 @@ class GroupAgent():
         if self.chat_utils.filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title}")
             return None
+        # 获取 channel 的 info，并根据 info 再次过滤广告号
+        channel_about = self.chat_utils.get_channel_about(channel)
+        if self.chat_utils.filter_entity_by_info(channel_about):
+            return None
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel {channel.id},{channel.username},{channel.title}")
             # channel 的 username 和 title 可能会变化，需要更新
             channel_item = self.channel_model.get_channel_by_id(channel.id)
             if channel.username != channel_item[1] or channel.title != channel_item[2]:
-                self.channel_model.update_channel(channel.id, channel.username, channel.title,
-                                                  channel.participants_count, today_date)
+                self.channel_model.update_channel(channel.id, channel.username, channel.title, today_date)
                 logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
+            # channel 类型：0-初始值，-1-失败，1-按摩师，2-导航，100-其他
             # 解析3次及以上仍然失败，就不再解析了
             if channel_item[5] <= 0 and channel_item[6] >= 3:
                 return None
-            # TODO: 如果解析成功过，就不再解析了
+            # 如果是导航或其他，不再解析；如果是按摩师，且是一个 teacher，就不再解析了
             if channel_item[5] > 0:
-                cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
-                if cur_teacher:
-                    return cur_teacher
-                else:
+                if channel_item[5] == 2 or channel_item[5] == 100:
                     return None
-
-        # 获取 channel 的 info，并根据 info 再次过滤广告号
-        channel_about = self.chat_utils.get_channel_about(channel)
-        if self.chat_utils.filter_entity_by_info(channel_about):
-            return None
-        self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                       channel.participants_count, channel_about, today_date)
-        logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
+                if channel_item[5] == 1:
+                    cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
+                    if cur_teacher:
+                        return cur_teacher
+        else:
+            self.channel_model.add_channel(channel.id, channel.username, channel.title,
+                                           channel.participants_count, channel_about, today_date)
+            logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息
         pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=200, reverse=True)
@@ -224,9 +225,8 @@ class GroupAgent():
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
             # 优先用新的 channel 消息
-            pinned_messages_latest, candidate_messages_latest = self.channel_agent.fetch_channel_messages(channel, limit=200)
-            prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages_latest + pinned_messages,
-                                                                         candidate_messages_latest + candidate_messages)
+            prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages,
+                                                                          candidate_messages[::-1])
             teacher_info = self.channel_agent.llm_parse_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
                 logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
@@ -234,11 +234,11 @@ class GroupAgent():
                 logger.error(f"Failed to parse teacher info of channel {channel.id},{channel.username},{channel.title}")
                 return None
 
-            # 从 about 中获取 channel 归属的 user；若失败，再从 channel 内容的联系方式中获取
+            # 从 about 中获取 channel 归属的 user；若失败，再从 channel 内容中获取
             if user_of_channel == None:
-                user_of_channel = self.chat_utils.get_user_from_channel(channel, channel_about)
+                user_of_channel = self.chat_utils.get_user_from_text(channel, channel_about)
             if user_of_channel == None:
-                user_of_channel = self.chat_utils.get_user_from_channel(channel, teacher_info.get("contact"))
+                user_of_channel = self.chat_utils.get_user_from_text(channel, prompt_content)
             if user_of_channel == None:
                 logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
                 return None

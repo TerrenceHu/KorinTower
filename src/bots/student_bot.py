@@ -1,12 +1,23 @@
 from loguru import logger
 from copy import deepcopy
 from textwrap import dedent
+from wcwidth import wcswidth
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
+from telegram.constants import ParseMode
 
 from models.district_model import DistrictModel
 from models.teacher_model import TeacherModel
+
+
+def format_name_with_wcwidth(name, target_width, fillchar=' '):
+    """使用 wcwidth 计算并格式化字符串"""
+    current_width = wcswidth(name)
+    padding_width = target_width - current_width
+    if padding_width > 0:
+        return name + fillchar * padding_width
+    return name[:target_width]  # 如果超出目标宽度，截断
 
 
 class StudentBot:
@@ -33,34 +44,13 @@ class StudentBot:
         2.「提交报告」：出击后请及时提交报告，造福同学们🙏
         3.「打赏作者」：兄弟们，用根烟钱支持一下呗🤝
 
-        更多功能敬请期待！使用反馈可联系 @roshicj
+        更多功能敬请期待！使用反馈可联系 @roshihero
         ⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️
         """)
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.message.from_user
         logger.info(f"User {user.id},{user.username} started the conversation")
-        
-
-        # 处理报告请求
-        args = context.args
-        if args and args[0].startswith("report_"):
-            # 删除用户发送的 /start 消息
-            chat_id = update.message.chat_id
-            message_id = update.message.message_id
-            try:
-                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-            except Exception as e:
-                logger.error(f"无法删除消息: {e}")
-            
-            user_username = args[0].split("_")[1]
-            teacher = self.teacher_model.get_teacher_by_user_username(user_username)
-            if teacher:
-                response = f"📄 老师报告：{teacher}"
-            else:
-                response = "未找到该老师的报告。"
-            await update.message.reply_html(response)
-            return
 
         # 发送欢迎消息
         keyboard = [
@@ -108,7 +98,7 @@ class StudentBot:
             return
         
         effective_teachers = self.teacher_model.get_effective_teachers_by_city(city_id)
-        logger.info(f"{effective_teachers} effective teachers in {city_id}{city_name}")
+        logger.info(f"{len(effective_teachers)} effective teachers in {city_id},{city_name}")
         # 一个城市的 teacher 太多，分区域检索
         if len(effective_teachers) > 100:
             keyboard, district_buttons, button_num = [], [], 0
@@ -128,12 +118,13 @@ class StudentBot:
             response = f"请选择「{city_name}」的具体区域："
             await query.message.reply_html(response, reply_markup=reply_markup)
         else:
-            response = f"<b>「{city_name}」</b>热门老师⬇️\n-------------------------\n"
-            for teacher in effective_teachers[0:10]:
+            response = f"<b>「{city_name}」</b>热门老师 ⬇️\n-------------------------\n"
+            for teacher in effective_teachers[0:20]:
                 user_username, name = teacher[3], teacher[4]
-                deep_link = f"https://t.me/roshicjbot?start=report_{user_username}"
-                response += f"👱‍♀️ <b>{name.ljust(10)}</b>@{user_username}  <a href='{deep_link}'>查看报告</a>\n"
-            await query.message.reply_html(response)
+                deep_link = f"https://t.me/Fde123jilu/6"
+                response += f"👱‍♀️ <b>{format_name_with_wcwidth(name, 12)}</b>私聊：@{user_username}\n"
+                response += f"      <a href='{deep_link}'>报告1</a>\n"
+            await query.message.reply_html(response, disable_web_page_preview=True)
     
     async def handle_district(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query

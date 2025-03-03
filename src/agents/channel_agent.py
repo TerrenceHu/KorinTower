@@ -122,6 +122,7 @@ class ChannelAgent():
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': ''}
             ]
+        
         try:
             response = dashscope.Generation.call(
                 api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
@@ -130,11 +131,11 @@ class ChannelAgent():
                 result_format='message',
                 temperature=0.1
                 )
-            logger.info(content)
-            logger.info(response)
+            logger.info(f"{content}\t{response}")
         except Exception as e:
             logger.error(f"LLM parse type error for {content}: {e}")
             return -1
+        
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type wrong code: {response}")
             system_prompt = self.type_prompt_template % (self.chat_utils.remove_nsfw_keywords(content))
@@ -176,6 +177,7 @@ class ChannelAgent():
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': ''}
             ]
+        
         try:
             response = dashscope.Generation.call(
                 api_key="sk-a7b8eb7981bf4b17b545a0caecfcaf50",
@@ -187,6 +189,7 @@ class ChannelAgent():
         except Exception as e:
             logger.error(f"LLM parse info error for {channel.id},{channel.username},{channel.title}: {e}")
             return None
+        
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
             

@@ -133,7 +133,7 @@ class ChatUtils:
             # 判断 channnel 是否能挂接到这个 user 上
             if isinstance(chat, User):
                 user_about = self.get_user_about(chat)
-                if self.filter_entity_by_info(user_about):
+                if self.filter_entity_by_about(user_about):
                     continue
                 _, _, channel_chats = self.get_chats_from(user_about)
                 if channel_chats:
@@ -194,9 +194,9 @@ class ChatUtils:
 
     # 过滤掉一些非老师的群成员
     @staticmethod
-    def filter_entity_by_info(info: str) -> bool:
+    def filter_entity_by_about(info: str) -> bool:
         key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
-                     u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
+                     u"交易", u"客服", u"代理", u"招商", u"平台", u"主营", u"安排",
                      u"全国", u"广告", u"软件", u"接码", u"老店", u"公群"]
         for key_word in key_words:
             if key_word in str(info):

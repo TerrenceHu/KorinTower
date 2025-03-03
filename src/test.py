@@ -14,6 +14,16 @@ logger.add(
     encoding="utf-8"
 )
 
+def test_group(client: TelegramClient, config: ConfigParser) -> None:
+    group_agent = GroupAgent(client, config)
+    group = client.get_entity("Benchixiuche168")
+    group_agent.process_group(group)
+
+def test_channel(client: TelegramClient, config: ConfigParser) -> None:
+    group_agent = GroupAgent(client, config)
+    channel = client.get_entity("Benchixiuche168")
+    teacher = group_agent.process_channel(channel, '')
+
 def main() -> None:
     # 读取配置
     config = ConfigParser()
@@ -37,15 +47,17 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    group_agent = GroupAgent(client, config)
-    channel = client.get_entity("yzbyjy666")
-    teacher = group_agent.process_channel(channel, '')
-    print(teacher)
+    #test_channel(client, config)
+    #test_group(client, config)
 
-    #group_agent = GroupAgent(client, config)
-    #group_agent.process_group(group)
-    #group = client.get_entity(2470910904)
-    #print(group)
+    source_channel_username = "Fde123jilu"
+    target_channel_username = "terrencemmw"
+    messages = client.get_messages(source_channel_username, limit=100)
+    combined_message = ""
+    for message in messages:
+        print(message)
+        combined_message += f"{message.message}\n\n"
+    #client.send_message(target_channel_username, combined_message)
 
     return
 

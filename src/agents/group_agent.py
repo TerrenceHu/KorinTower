@@ -147,7 +147,7 @@ class GroupAgent():
 
         # 获取用户的 info，并根据 info 再次过滤广告号
         about = self.chat_utils.get_user_about(user)
-        if self.chat_utils.filter_entity_by_info(about):
+        if self.chat_utils.filter_entity_by_about(about):
             return None
 
         self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
@@ -155,7 +155,7 @@ class GroupAgent():
 
         # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
         user_text = (user.first_name if user.first_name else "") + " " \
-                        + (user.last_name if user.last_name else "") + " " + about
+                        + (user.last_name if user.last_name else "") + " " + (about if about else "")
         user_city = self.chat_utils.get_city_from_text(user_text, threshold=1)
         if user_city == None:
             user_city = context_city
@@ -175,11 +175,12 @@ class GroupAgent():
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告、已经抓取过的 channel
         if self.chat_utils.filter_entity_by_title(channel.title):
-            logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title}")
+            logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by title")
             return None
         # 获取 channel 的 info，并根据 info 再次过滤广告号
         channel_about = self.chat_utils.get_channel_about(channel)
-        if self.chat_utils.filter_entity_by_info(channel_about):
+        if self.chat_utils.filter_entity_by_about(channel_about):
+            logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by about")
             return None
 
         if self.channel_model.does_channel_exist(channel.id):
@@ -202,8 +203,7 @@ class GroupAgent():
                     if cur_teacher:
                         return cur_teacher
         else:
-            self.channel_model.add_channel(channel.id, channel.username, channel.title,
-                                           channel.participants_count, channel_about, today_date)
+            self.channel_model.add_channel(channel.id, channel.username, channel.title, channel_about, today_date)
             logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息

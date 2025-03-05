@@ -28,6 +28,10 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(student_bot.handle_class, pattern="^class$"))
     application.add_handler(CallbackQueryHandler(student_bot.handle_city, pattern="^city"))
     application.add_handler(CallbackQueryHandler(student_bot.handle_district, pattern="^district"))
+    application.add_handler(CallbackQueryHandler(
+        student_bot.handle_pagination,
+        pattern="^(prev_page|next_page)"
+    ))
 
     application.add_handler(CallbackQueryHandler(student_bot.handle_feedback, pattern="^feedback$"))
     application.add_handler(CallbackQueryHandler(student_bot.handle_donate, pattern="^donate$"))

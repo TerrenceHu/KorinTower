@@ -33,11 +33,11 @@ class StudentBot:
                                           password=self.db_password, database=self.db_database)
         self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
-        
+
         self.opening_line = dedent("""
         👙 <b>我会什么</b> 👙
         获取TG全网的「老师」资源，包括联系方式、反馈报告等，帮你发现心仪的「老师」！
-        
+
         🔖 <b>使用说明</b> 🔖
         在下方选择您要的操作选项：
         1.「我要出击」：按位置、价格筛选，并查看报告，发现心仪的老师😍
@@ -47,6 +47,8 @@ class StudentBot:
         更多功能敬请期待！使用反馈可联系 @roshihero
         ⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️
         """)
+        # 初始化分页参数，每页显示10条
+        self.page_size = 10
 
     async def start(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = update.message.from_user
@@ -82,7 +84,7 @@ class StudentBot:
         else:
             if len(city_buttons) > 0:
                 keyboard.append(deepcopy(city_buttons))
-        
+
         reply_markup = InlineKeyboardMarkup(keyboard)
         response = "请选择您所在的城市，目前支持以下城市："
         await query.message.reply_html(response, reply_markup=reply_markup)
@@ -96,9 +98,10 @@ class StudentBot:
         if city_id is None:
             logger.error("Invalid city id in {query.data} for {user.id},{user.username}")
             return
-        
+
         effective_teachers = self.teacher_model.get_effective_teachers_by_city(city_id)
         logger.info(f"{len(effective_teachers)} effective teachers in {city_id},{city_name}")
+
         # 一个城市的 teacher 太多，分区域检索
         if len(effective_teachers) > 100:
             keyboard, district_buttons, button_num = [], [], 0
@@ -118,14 +121,79 @@ class StudentBot:
             response = f"请选择「{city_name}」的具体区域："
             await query.message.reply_html(response, reply_markup=reply_markup)
         else:
-            response = f"<b>「{city_name}」</b>热门老师 ⬇️\n-------------------------\n"
-            for teacher in effective_teachers[0:20]:
-                user_username, name = teacher[3], teacher[4]
-                deep_link = f"https://t.me/Fde123jilu/6"
-                response += f"👱‍♀️ <b>{format_name_with_wcwidth(name, 12)}</b>私聊：@{user_username}\n"
-                response += f"      <a href='{deep_link}'>报告1</a>\n"
-            await query.message.reply_html(response, disable_web_page_preview=True)
-    
+            total_pages = (len(effective_teachers) - 1) // self.page_size + 1
+            # 保存关键数据到上下文
+            context.user_data.update({
+                "current_city": city_name,
+                "teachers": effective_teachers,
+                "page_size": self.page_size,
+                "current_page": 0,
+                "total_pages": total_pages,
+                "first_call": True
+            })
+
+            # 统一调用分页
+            await self._show_teacher_page(update, context)
+
+
+    async def handle_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+
+        # 更新页码
+        if query.data == "prev_page":
+            context.user_data["current_page"] -= 1
+        elif query.data == "next_page":
+            context.user_data["current_page"] += 1
+
+        context.user_data["first_call"] = False
+        # 重新调用分页
+        await self._show_teacher_page(update, context)
+
+    async def _show_teacher_page(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+
+        data = context.user_data
+        current_page = data["current_page"]
+        start_idx = current_page * data["page_size"]
+        end_idx = start_idx + data["page_size"]
+        current_teachers = data["teachers"][start_idx:end_idx]
+
+        # 构建消息内容
+        response = f"<b>「{data['current_city']}」热门老师</b>（第 {current_page + 1}/{data['total_pages']} 页）\n"
+        response += "-------------------------\n"
+        for teacher in current_teachers:
+            username, name = teacher[3], teacher[4]
+            response += f"👱‍♀️ <b>{format_name_with_wcwidth(name, 12)}</b>私聊：@{username}\n"
+            response += f"      <a href='https://t.me/Fde123jilu/6'>查看报告</a>\n"
+
+        # 构建翻页按钮
+        buttons = []
+        if current_page > 0:
+            buttons.append(InlineKeyboardButton("⬅️ 上一页", callback_data="prev_page"))
+        if current_page < data["total_pages"] - 1:
+            buttons.append(InlineKeyboardButton("下一页 ➡️", callback_data="next_page"))
+        reply_markup = InlineKeyboardMarkup([buttons]) if buttons else None
+
+        # 更新或发送消息
+        try:
+            if data["first_call"]:
+                await query.message.reply_html(
+                    response,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+            else:
+                await query.edit_message_text(
+                    response,
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=reply_markup,
+                    disable_web_page_preview=True
+                )
+        except Exception as e:
+            logger.error(f"分页消息更新失败: {e}")
+
     async def handle_district(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
@@ -135,7 +203,7 @@ class StudentBot:
         if district_id is None:
             logger.error("Invalid district id in {query.data} for {user.id},{user.username}")
             return
-        
+
         effective_teachers = self.teacher_model.get_effective_teachers_by_city(district_id)
 
     async def handle_feedback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

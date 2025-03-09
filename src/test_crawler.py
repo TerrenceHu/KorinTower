@@ -21,7 +21,7 @@ def test_group(client: TelegramClient, config: ConfigParser) -> None:
 
 def test_channel(client: TelegramClient, config: ConfigParser) -> None:
     group_agent = GroupAgent(client, config)
-    channel = client.get_entity("Benchixiuche168")
+    channel = client.get_entity("Fde123jilu")
     teacher = group_agent.process_channel(channel, '')
 
 def main() -> None:
@@ -47,10 +47,11 @@ def main() -> None:
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
 
-    #test_channel(client, config)
+    test_channel(client, config)
     #test_group(client, config)
 
-    source_channel_username = "Fde123jilu"
+    '''
+    source_channel_username = "yilantingfeng123"
     target_channel_username = "terrencemmw"
     messages = client.get_messages(source_channel_username, limit=100)
     combined_message = ""
@@ -58,7 +59,7 @@ def main() -> None:
         print(message)
         combined_message += f"{message.message}\n\n"
     #client.send_message(target_channel_username, combined_message)
-
+    '''
     return
 
 if __name__ == "__main__":

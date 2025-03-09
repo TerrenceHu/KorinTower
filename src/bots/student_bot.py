@@ -1,7 +1,6 @@
 from loguru import logger
 from copy import deepcopy
 from textwrap import dedent
-from wcwidth import wcswidth
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -9,15 +8,7 @@ from telegram.constants import ParseMode
 
 from models.district_model import DistrictModel
 from models.teacher_model import TeacherModel
-
-
-def format_name_with_wcwidth(name, target_width, fillchar=' '):
-    """使用 wcwidth 计算并格式化字符串"""
-    current_width = wcswidth(name)
-    padding_width = target_width - current_width
-    if padding_width > 0:
-        return name + fillchar * padding_width
-    return name[:target_width]  # 如果超出目标宽度，截断
+from utils.bot_utils import *
 
 
 class StudentBot:
@@ -57,7 +48,7 @@ class StudentBot:
         # 发送欢迎消息
         keyboard = [
             [
-                InlineKeyboardButton("我要出击", callback_data="class"),
+                InlineKeyboardButton("我要出击", callback_data="go"),
                 InlineKeyboardButton("提交报告", callback_data="feedback"),
                 InlineKeyboardButton("打赏作者", callback_data="donate"),
             ]
@@ -67,7 +58,7 @@ class StudentBot:
         response = f"<b>{user.first_name}{user.last_name}</b> 您好，我是好色的龟仙人！\n{self.opening_line}"
         await update.message.reply_html(response, reply_markup=reply_markup)
 
-    async def handle_class(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async def handle_go(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query
         await query.answer()
 
@@ -104,21 +95,10 @@ class StudentBot:
 
         # 一个城市的 teacher 太多，分区域检索
         if len(effective_teachers) > 100:
-            keyboard, district_buttons, button_num = [], [], 0
             districts = self.district_model.get_districts_of_city(city_id)
-            for district in districts:
-                district_id = district[0]
-                district_name = district[1].rstrip("区")
-                district_buttons.append(InlineKeyboardButton(district[1], callback_data=f"district_{district_id}_{district_name}"))
-                button_num += 1
-                if button_num % 5 == 0:
-                    keyboard.append(deepcopy(district_buttons))
-                    district_buttons = []
-            else:
-                if len(district_buttons) > 0:
-                    keyboard.append(deepcopy(district_buttons))
-            reply_markup = InlineKeyboardMarkup(keyboard)
-            response = f"请选择「{city_name}」的具体区域："
+            district_keyboard = self._show_district_keyboard(districts)
+            reply_markup = InlineKeyboardMarkup(district_keyboard)
+            response = f"「{city_name}」老师太多啦，请选择具体区域："
             await query.message.reply_html(response, reply_markup=reply_markup)
         else:
             total_pages = (len(effective_teachers) - 1) // self.page_size + 1
@@ -131,10 +111,34 @@ class StudentBot:
                 "total_pages": total_pages,
                 "first_call": True
             })
-
             # 统一调用分页
             await self._show_teacher_page(update, context)
 
+    async def handle_district(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        query = update.callback_query
+        await query.answer()
+
+        district_id = query.data.split("_")[1] if "_" in query.data else None
+        district_name = query.data.split("_")[2] if "_" in query.data else None
+        if district_id is None:
+            logger.error("Invalid district id in {query.data} for {user.id},{user.username}")
+            return
+    
+        effective_teachers = self.teacher_model.get_effective_teachers_by_district(district_id)
+        logger.info(f"{len(effective_teachers)} effective teachers in {district_id},{district_name}")
+
+        total_pages = (len(effective_teachers) - 1) // self.page_size + 1
+        # 保存关键数据到上下文
+        context.user_data.update({
+            "current_district": district_name,
+            "teachers": effective_teachers,
+            "page_size": self.page_size,
+            "current_page": 0,
+            "total_pages": total_pages,
+            "first_call": True
+        })
+        # 统一调用分页
+        await self._show_teacher_page(update, context)
 
     async def handle_pagination(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
@@ -156,15 +160,23 @@ class StudentBot:
 
         data = context.user_data
         current_page = data["current_page"]
+        if 'current_city' in data:
+            current_district = data['current_city']
+        elif 'current_district' in data:
+            current_district = data['current_district']
+        else:
+            logger.error('current_city or current_district not found in user_data')
+            return
+        total_pages = data['total_pages']
         start_idx = current_page * data["page_size"]
         end_idx = start_idx + data["page_size"]
         current_teachers = data["teachers"][start_idx:end_idx]
 
         # 构建消息内容
-        response = f"<b>「{data['current_city']}」热门老师</b>（第 {current_page + 1}/{data['total_pages']} 页）\n"
+        response = f"<b>「{current_district}」热门老师</b>（第 {current_page + 1}/{total_pages} 页）\n"
         response += "-------------------------\n"
         for teacher in current_teachers:
-            username, name = teacher[3], teacher[4]
+            username, name = teacher[0], teacher[1]
             response += f"👱‍♀️ <b>{format_name_with_wcwidth(name, 12)}</b>私聊：@{username}\n"
             response += f"      <a href='https://t.me/Fde123jilu/6'>查看报告</a>\n"
 
@@ -172,7 +184,7 @@ class StudentBot:
         buttons = []
         if current_page > 0:
             buttons.append(InlineKeyboardButton("⬅️ 上一页", callback_data="prev_page"))
-        if current_page < data["total_pages"] - 1:
+        if current_page < total_pages - 1:
             buttons.append(InlineKeyboardButton("下一页 ➡️", callback_data="next_page"))
         reply_markup = InlineKeyboardMarkup([buttons]) if buttons else None
 
@@ -194,17 +206,21 @@ class StudentBot:
         except Exception as e:
             logger.error(f"分页消息更新失败: {e}")
 
-    async def handle_district(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        query = update.callback_query
-        await query.answer()
+    def _show_district_keyboard(self, districts):
+        keyboard, district_buttons, button_num = [], [], 0
+        for district in districts:
+            district_id = district[0]
+            district_name = district[1].rstrip("区")
+            district_buttons.append(InlineKeyboardButton(district[1], callback_data=f"district_{district_id}_{district_name}"))
+            button_num += 1
+            if button_num % 5 == 0:
+                keyboard.append(deepcopy(district_buttons))
+                district_buttons = []
+        else:
+            if len(district_buttons) > 0:
+                keyboard.append(deepcopy(district_buttons))
+        return keyboard
 
-        district_id = query.data.split("_")[1] if "_" in query.data else None
-        district_name = query.data.split("_")[2] if "_" in query.data else None
-        if district_id is None:
-            logger.error("Invalid district id in {query.data} for {user.id},{user.username}")
-            return
-
-        effective_teachers = self.teacher_model.get_effective_teachers_by_city(district_id)
 
     async def handle_feedback(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         query = update.callback_query

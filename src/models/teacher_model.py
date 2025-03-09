@@ -75,7 +75,7 @@ class TeacherModel:
         """
         获取某城市中所有 teachers 记录
         """
-        select_query = "SELECT * FROM teachers where status = 0 and city_id = %s"
+        select_query = "SELECT DISTINCT user_username, name FROM teachers where status = 0 and city_id = %s"
         values = (city_id,)
         try:
             self.cursor.execute(select_query, values)
@@ -87,7 +87,7 @@ class TeacherModel:
         """
         获取某区域中所有 teachers 记录
         """
-        select_query = "SELECT * FROM teachers where status = 0 and district_id = %s"
+        select_query = "SELECT DISTINCT user_username, name FROM teachers where status = 0 and district_id = %s"
         values = (district_id,)
         try:
             self.cursor.execute(select_query, values)

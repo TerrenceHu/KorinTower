@@ -131,3 +131,13 @@ CREATE TABLE kt.districts (
   status INT DEFAULT 0,
   KEY `idx_pid` (pid)
 ) ENGINE=INNODB DEFAULT CHARSET=utf8;
+
+
+--------------------------------
+-- visited usernames
+--------------------------------
+DROP TABLE IF EXISTS kt.visited_usernames;
+CREATE TABLE kt.visited_usernames (
+	username VARCHAR(100) PRIMARY KEY,
+	visited_date DATE
+)

@@ -1,5 +1,5 @@
-from loguru import logger
 from datetime import date, datetime
+from loguru import logger
 
 import mysql.connector
 from mysql.connector import Error

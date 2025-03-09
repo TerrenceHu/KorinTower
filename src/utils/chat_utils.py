@@ -80,7 +80,7 @@ class ChatUtils:
 
     # 获取文本中 user、group 和 channel
     def get_chats_from(self, input_text: str):
-        chat_names = self.find_chatnames(input_text)
+        chat_names = self.find_usernames(input_text)
         if len(chat_names) < 1:
             return None, None, None
 
@@ -89,10 +89,10 @@ class ChatUtils:
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
-            if chat_name in processed_chat_names:
+            if chat_name in processed_usernames:
                 logger.info(f"Already checked chat {chat_name}")
                 continue
-            processed_chat_names[chat_name] = 1
+            processed_usernames[chat_name] = 1
 
             # TODO: private chat 怎么处理？
             if chat_name.startswith("+"):
@@ -116,7 +116,7 @@ class ChatUtils:
         return user_chats, group_chats, channel_chats
 
     def get_user_from_text(self, channel: Channel, text: str) -> User:
-        chat_names = self.find_chatnames(text)
+        chat_names = self.find_usernames(text)
         logger.info(f"Fetch user from chat names {chat_names} in {text}")
         if len(chat_names) < 1:
             return None
@@ -145,7 +145,7 @@ class ChatUtils:
         return None
 
     @staticmethod
-    def find_chatnames(input_text):
+    def find_usernames(input_text):
         pattern1 = r'@([\w_]+)'
         pattern2 = r't\.me/([\w+-]+)'
 

@@ -25,7 +25,7 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", student_bot.start))
 
-    application.add_handler(CallbackQueryHandler(student_bot.handle_class, pattern="^class$"))
+    application.add_handler(CallbackQueryHandler(student_bot.handle_go, pattern="^go$"))
     application.add_handler(CallbackQueryHandler(student_bot.handle_city, pattern="^city"))
     application.add_handler(CallbackQueryHandler(student_bot.handle_district, pattern="^district"))
     application.add_handler(CallbackQueryHandler(

@@ -1,10 +1,9 @@
-import logging
 from datetime import date
+from loguru import logger
 
 import mysql.connector
 from mysql.connector import Error
 
-logger = logging.getLogger(__name__)
 
 class GroupModel:
     def __init__(self, host, user, password, database):

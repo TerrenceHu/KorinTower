@@ -153,7 +153,7 @@ class GroupAgent():
         self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
         logger.info(f"Add new user {user.id},{user.username} to db")
 
-        # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用群组的城市
+        # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用上下文城市
         user_text = (user.first_name if user.first_name else "") + " " \
                         + (user.last_name if user.last_name else "") + " " + (about if about else "")
         user_city = self.chat_utils.get_city_from_text(user_text, threshold=1)
@@ -173,7 +173,7 @@ class GroupAgent():
 
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
-        # 过滤广告、已经抓取过的 channel
+        # 过滤广告 channel
         if self.chat_utils.filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by title")
             return None
@@ -194,7 +194,7 @@ class GroupAgent():
             # 解析3次及以上仍然失败，就不再解析了
             if channel_item[5] <= 0 and channel_item[6] >= 3:
                 return None
-            # 如果是导航或其他，不再解析；如果是按摩师，且是一个 teacher，就不再解析了
+            # 如果是导航、或其他、或 teacher，就不再解析了
             if channel_item[5] > 0:
                 if channel_item[5] == 2 or channel_item[5] == 100:
                     return None
@@ -268,47 +268,48 @@ class GroupAgent():
 
     def process_message(self, channel: Channel, context_city: str, message_text: str):
         logger.info(f"Processing message {message_text} from {channel.id},{channel.username},{context_city}")
-        chat_names = self.chat_utils.find_chatnames(message_text)
-        if len(chat_names) < 1:
+        usernames = self.chat_utils.find_usernames(message_text)
+        if len(usernames) < 1:
             return
-        logger.info(f"Process chat names {chat_names} from message")
+        logger.info(f"Process usernames {usernames} from message")
 
+        # 类别0：消息不是服务反馈；类别1：消息是正向反馈；类别2：消息是负向反馈
         message_type = self.text_processor.predict(message_text)
         logger.info(f"Message {message_text} type {message_type}")
 
-        for chat_name in chat_names:
-            if chat_name.lower().endswith("bot"):
+        for username in usernames:
+            if username.lower().endswith("bot"):
                 continue
-            if chat_name in processed_chat_names:
-                logger.info(f"Already checked chat {chat_name}")
+            if username in processed_usernames:
+                logger.info(f"Already checked chat {username}")
                 continue
-            processed_chat_names[chat_name] = 1
-            if chat_name == channel.username:
-                logger.info(f"Ignore self username {chat_name}")
+            processed_chat_names[username] = 1
+            if username == channel.username:
+                logger.info(f"Ignore self username {username}")
                 continue
 
             # TODO: private chat 怎么处理？
-            if chat_name.startswith("+"):
+            if username.startswith("+"):
                 #self.join_private_chat(chat_name)
                 continue
 
             try:
-                chat = self.client.get_entity(chat_name)
+                chat = self.client.get_entity(username)
             except Exception as e:
-                logger.error(f"Failed to get_entity {chat_name}: {e}")
+                logger.error(f"Failed to get_entity {username}: {e}")
                 continue
 
             # 如果是 User
             if isinstance(chat, User):
-                logger.info(f"Chat {chat_name} is a user")
+                logger.info(f"Chat {username} is a user")
                 self.process_user(chat, context_city)
             # 如果是 Group
             elif chat.megagroup == True:
-                logger.info(f"Chat {chat_name} is a group")
+                logger.info(f"Chat {username} is a group")
                 self.process_group(chat)
             # 如果是 Channel
             else:
-                logger.info(f"Chat {chat_name} is a channel")
+                logger.info(f"Chat {username} is a channel")
                 result = self.process_channel(chat, context_city)
 
     def process_group(self, group: Channel):

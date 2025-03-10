@@ -21,7 +21,7 @@ def test_group(client: TelegramClient, config: ConfigParser) -> None:
 
 def test_channel(client: TelegramClient, config: ConfigParser) -> None:
     group_agent = GroupAgent(client, config)
-    channel = client.get_entity("Fde123jilu")
+    channel = client.get_entity("shenzhen_youyou")
     teacher = group_agent.process_channel(channel, '')
 
 def main() -> None:

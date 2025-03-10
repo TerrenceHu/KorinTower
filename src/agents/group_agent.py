@@ -168,7 +168,6 @@ class GroupAgent():
             for channel_chat in channel_chats:
                 if not self.user_model.is_channel_on_user(user.id, channel_chat.id):
                     self.user_model.add_channel_on_user(user.id, channel_chat.id, today_date)
-                    logger.info(f"Add channel {channel_chat.id} on {user.id}")
                 self.process_channel(channel_chat, user_city, user)
 
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
@@ -185,26 +184,15 @@ class GroupAgent():
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel {channel.id},{channel.username},{channel.title}")
-            # channel 的 username 和 title 可能会变化，需要更新
             channel_item = self.channel_model.get_channel_by_id(channel.id)
-            if channel.username != channel_item[1] or channel.title != channel_item[2]:
-                self.channel_model.update_channel(channel.id, channel.username, channel.title, today_date)
-                logger.info(f"Update channel {channel.id},{channel.username},{channel.title}")
-            # channel 类型：0-初始值，-1-失败，1-按摩师，2-导航，100-其他
-            # 解析3次及以上仍然失败，就不再解析了
-            if channel_item[5] <= 0 and channel_item[6] >= 3:
-                return None
-            # 如果是导航、或其他、或 teacher，就不再解析了
-            if channel_item[5] > 0:
-                if channel_item[5] == 2 or channel_item[5] == 100:
-                    return None
-                if channel_item[5] == 1:
-                    cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
-                    if cur_teacher:
-                        return cur_teacher
-        else:
-            self.channel_model.add_channel(channel.id, channel.username, channel.title, channel_about, today_date)
-            logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
+            if channel_item[5] == 1:
+                cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
+                if cur_teacher:
+                    return cur_teacher
+            return None
+            
+        self.channel_model.add_channel(channel.id, channel.username, channel.title, channel_about, today_date)
+        logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
 
         # 抓取 channel 消息
         pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=200, reverse=True)
@@ -283,7 +271,7 @@ class GroupAgent():
             if username in processed_usernames:
                 logger.info(f"Already checked chat {username}")
                 continue
-            processed_chat_names[username] = 1
+            processed_usernames[username] = 1
             if username == channel.username:
                 logger.info(f"Ignore self username {username}")
                 continue

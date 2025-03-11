@@ -83,8 +83,7 @@ class ChatUtils:
         chat_names = self.find_usernames(input_text)
         if len(chat_names) < 1:
             return None, None, None
-
-        logger.info(f"Processing chat names {chat_names}")
+        
         user_chats, group_chats, channel_chats = [], [], []
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
@@ -117,7 +116,7 @@ class ChatUtils:
 
     def get_user_from_text(self, channel: Channel, text: str) -> User:
         chat_names = self.find_usernames(text)
-        logger.info(f"Fetch user from chat names {chat_names} in {text}")
+        logger.info(f"Fetch user from chat names {chat_names} in {text[:200]}")
         if len(chat_names) < 1:
             return None
 

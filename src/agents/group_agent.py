@@ -78,7 +78,7 @@ class GroupAgent():
                             logger.error(f"Group {id},{username},{title} is not the same as {group.id}")
                             if not self.group_model.does_group_exist(group.id):
                                 self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
-                                logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
+                                logger.info(f"Add new group {group.id},{group.username},{group.title}")
                             raise(e)
                     else:
                         raise(e)
@@ -153,7 +153,7 @@ class GroupAgent():
             return None
 
         self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
-        logger.info(f"Add new user {user.id},{user.username} to db")
+        logger.info(f"Add new user {user.id},{user.username}")
 
         # 如果从用户的 name 和 about 中获取到城市，则使用这个城市，否则就用上下文城市
         user_text = (user.first_name if user.first_name else "") + " " \
@@ -167,10 +167,11 @@ class GroupAgent():
             for group_chat in group_chats:
                 self.process_group(group_chat)
         if channel_chats:
-            for channel_chat in channel_chats:
-                if not self.user_model.is_channel_on_user(user.id, channel_chat.id):
-                    self.user_model.add_channel_on_user(user.id, channel_chat.id, today_date)
-                self.process_channel(channel_chat, user_city, user)
+            for channel in channel_chats:
+                if not self.user_model.is_channel_on_user(user.id, channel.id):
+                    self.user_model.add_channel_on_user(user.id, channel.id, today_date)
+                    logger.info(f"Add channel {channel.id},{channel.username} on user {user.id},{user.username}")
+                self.process_channel(channel, user_city, user)
 
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
@@ -186,17 +187,13 @@ class GroupAgent():
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel {channel.id},{channel.username},{channel.title}")
-            cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
-            if cur_teacher:
-                return cur_teacher
-            else:
-                return None
+            return None
             
         self.channel_model.add_channel(channel.id, channel.username, channel.title, channel_about, today_date)
-        logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
+        logger.info(f"Add new channel {channel.id},{channel.username},{channel.title}")
 
         # 抓取 channel 消息
-        pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=200, reverse=True)
+        pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=100)
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Empty messages of channel {channel.id}")
             return None
@@ -236,16 +233,16 @@ class GroupAgent():
                 logger.info(f"Add channel {channel.id},{channel.username} on user {user_of_channel.id},{user_of_channel.username}")
 
             if teacher_info:
-                if self.teacher_model.does_teacher_exist(channel.id):
-                    logger.info(f"Already added teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username}")
+                if self.teacher_model.does_teacher_exist(user_of_channel.id):
+                    logger.info(f"Already added teacher {user_of_channel.id},{user_of_channel.username}")
                 else:
                     self.channel_agent.norm_and_add_teacher(channel, user_of_channel, teacher_info)
-                    logger.info(f"Add new teacher {channel.id},{channel.username},{user_of_channel.id},{user_of_channel.username} to db")
-                return self.teacher_model.get_teacher_by_channel_id(channel.id)
+                    logger.info(f"Add new teacher {user_of_channel.id},{user_of_channel.username}")
+                return self.teacher_model.get_teacher_by_id(channel.id)
 
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
-            pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=1000)
+            pinned_messages, candidate_messages = self.channel_agent.fetch_nav_channel_messages(channel, limit=1000)
             messages_text = ' ' . join(pinned_messages +  candidate_messages)
             channel_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
             if channel_city:
@@ -298,7 +295,7 @@ class GroupAgent():
             # 如果是 Channel
             else:
                 logger.info(f"Chat {username} is a channel")
-                result = self.process_channel(chat, context_city)
+                self.process_channel(chat, context_city)
 
     def process_group(self, group: Channel):
         if isinstance(group, ChannelForbidden):
@@ -325,7 +322,7 @@ class GroupAgent():
             return
         
         self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)
-        logger.info(f"Add new group {group.id},{group.username},{group.title} to db")
+        logger.info(f"Add new group {group.id},{group.username},{group.title}")
 
         group_city = None
         # 根据群成员的城市或辖区来判断群组归属的城市

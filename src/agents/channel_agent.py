@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import date
+from typing import List
 from http import HTTPStatus
 from configparser import ConfigParser
 from loguru import logger
@@ -8,7 +9,7 @@ import paddleocr
 import dashscope
 
 from telethon.sync import TelegramClient
-from telethon.tl.types import User, Channel, MessageMediaPhoto
+from telethon.tl.types import User, Channel, Message, MessageMediaPhoto
 
 from utils.chat_utils import ChatUtils
 from models.channel_model import ChannelModel
@@ -50,15 +51,34 @@ class ChannelAgent():
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
-    def fetch_channel_messages(self, channel: Channel, limit: int, reverse: bool = False):
-        # 只抓取最早的一批消息进行存储，很可能包含老师的课表信息
+    def _fetch_messages(self, channel: Channel, limit: int, reverse: bool):
         try:
             messages = self.client.get_messages(channel.id, limit=limit, reverse=reverse)
         except Exception as e:
-            return None, None
+            logger.error(f"Failed to fetch messages for channel {channel.id}{channel.username}: {e}")
+            return []
+        return messages
+
+    def _deduplicate_messages(self, messages: List[Message]):
+        seen = set()
+        unique_messages = []
+        for msg in messages:
+            if msg.id not in seen:
+                seen.add(msg.id)
+                unique_messages.append(msg)
+        return unique_messages
+
+    def fetch_channel_messages(self, channel: Channel, limit: int):
+        # 获取最早的 100 条消息
+        earliest_messages = self._fetch_messages(channel, limit, reverse=True)
+        # 获取最晚的 100 条消息
+        latest_messages = self._fetch_messages(channel, limit, reverse=False)
+
+        # 合并消息列表并去重
+        unique_messages = self._deduplicate_messages(earliest_messages + latest_messages)
 
         pinned_messages, class_messages, candidate_messages = [], [], []
-        for message in messages:
+        for message in unique_messages:
             if not message.message and not message.pinned:
                 continue
             # 消息是否可评论、回复数、点赞数、浏览数
@@ -78,8 +98,8 @@ class ChannelAgent():
                     if photo_text:
                         message_text = photo_text + ' ' + message_text
                 pinned_messages.append(message_text)
+            # 有些非 pinned 的消息中包含课表图片，且文字一般不会太长
             elif "课表" in message_text and len(message_text) < 100:
-                # 有些非 pinned 的消息中包含课表图片，且文字一般不会太长
                 if isinstance(message.media, MessageMediaPhoto):
                     photo_text = self.parse_photo_text(message.media, channel.id, message.id)
                     if photo_text:
@@ -95,6 +115,37 @@ class ChannelAgent():
 
         return pinned_messages, candidate_messages
 
+    def fetch_nav_channel_messages(self, channel: Channel, limit: int, reverse: bool = False):
+        try:
+            messages = self.client.get_messages(channel.id, limit=limit, reverse=reverse)
+        except Exception as e:
+            return None, None
+
+        pinned_messages, candidate_messages = [], []
+        for message in messages:
+            if not message.message and not message.pinned:
+                continue
+            # 消息是否可评论、回复数、点赞数、浏览数
+            comments, replies, reactions, views = False, 0, 0, message.views
+            if message.replies:
+                comments = message.replies.comments
+                replies = message.replies.replies
+            if message.reactions:
+                for result in message.reactions.results:
+                    reactions += result.count
+
+            # 只识别pinned消息中图片的文字信息
+            message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') if message.message else ''
+            if message.pinned:
+                pinned_messages.append(message_text)
+            else:
+                candidate_messages.append(message_text)
+
+            self.channel_model.add_message_to_channel(channel.id, message.id, message_text, message.pinned,
+                                                      comments, replies, reactions, views, message.date)
+
+        return pinned_messages, candidate_messages
+    
     # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
     def get_prompt_from_messages(self, pinned_messages, candidate_messages):
         prompt_messages = []
@@ -248,11 +299,11 @@ class ChannelAgent():
         district_id = self.district_model.get_district_id_by_name(district, city_id)
         logger.info(f"{teacher_info},{city_id},{district_id}")
         
-        self.teacher_model.add_teacher(channel.id, channel.username,
-                                       user_of_channel.id, user_of_channel.username,
+        self.teacher_model.add_teacher(user_of_channel.id, user_of_channel.username,
                                        name, city_id, district_id, price, price1,
                                        age, height, weight, measurement, service,
                                        today_date)
+
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")
         try:

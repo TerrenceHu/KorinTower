@@ -83,20 +83,16 @@ COLLATE=utf8mb4_general_ci;
 --------------------------------
 DROP TABLE IF EXISTS kt.teachers;
 CREATE TABLE kt.teachers (
-	channel_id BIGINT NOT NULL,
-	channel_username VARCHAR(100),
-	user_id BIGINT NOT NULL,
-	user_username VARCHAR(100),
+	id BIGINT PRIMARY KEY,
+	username VARCHAR(100),
 	name VARCHAR(100),
 	city_id BIGINT,
 	district_id BIGINT,
 	price1p VARCHAR(255),
 	status INT DEFAULT 0,
 	updated_date DATE,
-	PRIMARY KEY (user_id, channel_id),
-	INDEX idx_user_id (user_id),
-	INDEX idx_channel_id (channel_id),
-	INDEX idx_city_id (city_id)
+	INDEX idx_city_id (city_id),
+	INDEX idx_district_id (district_id)
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -104,15 +100,14 @@ COLLATE=utf8mb4_general_ci;
 
 DROP TABLE IF EXISTS kt.teachers_info;
 CREATE TABLE kt.teachers_info (
-    channel_id BIGINT NOT NULL,
+    id BIGINT PRIMARY KEY,
 	age VARCHAR(100),
 	price VARCHAR(255),
 	height VARCHAR(100),
 	weight VARCHAR(100),
 	measurement VARCHAR(100),
     service VARCHAR(255),
-    PRIMARY KEY (channel_id),
-    FOREIGN KEY (channel_id) REFERENCES kt.teachers(channel_id) ON DELETE CASCADE
+    FOREIGN KEY (id) REFERENCES kt.teachers(id) ON DELETE CASCADE
 );
 
 --------------------------------

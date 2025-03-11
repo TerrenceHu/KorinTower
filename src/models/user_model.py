@@ -115,7 +115,7 @@ class UserModel:
             print(f"Error checking if channel exists on user: {e}")
             return False
 
-    def add_channel_on_user(self, user_id: int, channel_id: int, updated_on: date):
+    def add_channel_on_user(self, user_id: int, channel_id: int, updated_date: date):
         """
         将 channel 添加到 user 上
         """
@@ -123,10 +123,10 @@ class UserModel:
             return
 
         insert_query = '''
-        INSERT INTO user_channels (user_id, channel_id, updated_on) VALUES (%s, %s, %s);
+        INSERT INTO user_channels (user_id, channel_id, updated_date) VALUES (%s, %s, %s);
         '''
         try:
-            self.cursor.execute(insert_query, (user_id, channel_id, updated_on))
+            self.cursor.execute(insert_query, (user_id, channel_id, updated_date))
             self.connection.commit()
         except Error as e:
             print(f"Error adding channel on user: {e} {user_id} {channel_id}")

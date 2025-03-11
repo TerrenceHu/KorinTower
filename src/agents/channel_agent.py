@@ -51,7 +51,7 @@ class ChannelAgent():
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
     def fetch_channel_messages(self, channel: Channel, limit: int, reverse: bool = False):
-        # 只抓取最早的200条消息进行存储，很可能包含老师的课表信息
+        # 只抓取最早的一批消息进行存储，很可能包含老师的课表信息
         try:
             messages = self.client.get_messages(channel.id, limit=limit, reverse=reverse)
         except Exception as e:

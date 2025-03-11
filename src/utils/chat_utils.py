@@ -220,7 +220,7 @@ class ChatUtils:
                     u"丝足", u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙",
                     u"双飞", u"胸推", u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"口技",
                     u"勾引", u"全裸", u"私处", u"骚话", u"潮吹", u"潮喷", u"强奸", u"高潮", u"颜射", u"乳交",
-                    u"蛋蛋", u"白虎", u"女上", u"骑乘", u"叫床", u"裸聊"]
+                    u"蛋蛋", u"白虎", u"女上", u"骑乘", u"叫床", u"裸聊", u"裸照"]
         # 使用正则表达式匹配关键词，并替换为空字符串
         pattern = re.compile(r'(' + '|'.join(re.escape(keyword) for keyword in keywords) + r')')
         cleaned_text = pattern.sub('', text)

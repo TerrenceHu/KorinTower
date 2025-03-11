@@ -17,7 +17,7 @@ DROP TABLE IF EXISTS kt.user_channels;
 CREATE TABLE kt.user_channels (
 	user_id BIGINT NOT NULL,
 	channel_id BIGINT NOT NULL,
-	updated_on DATE,
+	updated_date DATE,
 	PRIMARY KEY (user_id, channel_id),
 	INDEX idx_user_id (user_id),
 	INDEX idx_channel_id (channel_id),
@@ -37,7 +37,7 @@ CREATE TABLE kt.groups (
 	participants_count BIGINT,
 	city VARCHAR(100) DEFAULT NULL,
 	status INT DEFAULT 0,
-	updated_on DATE
+	updated_date DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -55,7 +55,7 @@ CREATE TABLE kt.channels (
 	type INT DEFAULT 0,
 	retries INT DEFAULT 0,
 	status INT DEFAULT 0,
-	updated_on DATE
+	updated_date DATE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -92,7 +92,7 @@ CREATE TABLE kt.teachers (
 	district_id BIGINT,
 	price1p VARCHAR(255),
 	status INT DEFAULT 0,
-	updated_on DATE,
+	updated_date DATE,
 	PRIMARY KEY (user_id, channel_id),
 	INDEX idx_user_id (user_id),
 	INDEX idx_channel_id (channel_id),
@@ -114,11 +114,6 @@ CREATE TABLE kt.teachers_info (
     PRIMARY KEY (channel_id),
     FOREIGN KEY (channel_id) REFERENCES kt.teachers(channel_id) ON DELETE CASCADE
 );
-
-
-INSERT INTO kt.teachers (channel_id, channel_username, user_id, user_username, name, city_id, district, age, price, height, weight, measurement, service, status, updated_on)
-SELECT channel_id, channel_username, user_id, user_username, name, 518000, district, age, price, height, weight, measurement, service, status, updated_on
-FROM kt.teachers_temp;
 
 --------------------------------
 -- districts

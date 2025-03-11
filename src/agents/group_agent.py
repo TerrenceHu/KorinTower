@@ -102,6 +102,7 @@ class GroupAgent():
 
             for member in members:
                 self.process_user(member, group_city)
+            self.group_model.update_group_date(id, today_date)
 
     # 获取群组消息，从群组消息中获取 group 或 channel
     def get_group_messages(self) -> None:
@@ -129,6 +130,7 @@ class GroupAgent():
             else:
                 f.close()
             '''
+        self.group_model.update_group_date(id, today_date)
 
     def process_user(self, user: User, context_city: str):
         # 过滤bot、广告号、已经爬过的用户，减少TG请求
@@ -184,12 +186,11 @@ class GroupAgent():
 
         if self.channel_model.does_channel_exist(channel.id):
             logger.info(f"Already added channel {channel.id},{channel.username},{channel.title}")
-            channel_item = self.channel_model.get_channel_by_id(channel.id)
-            if channel_item[5] == 1:
-                cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
-                if cur_teacher:
-                    return cur_teacher
-            return None
+            cur_teacher = self.teacher_model.get_teacher_by_channel_id(channel.id)
+            if cur_teacher:
+                return cur_teacher
+            else:
+                return None
             
         self.channel_model.add_channel(channel.id, channel.username, channel.title, channel_about, today_date)
         logger.info(f"Add new channel {channel.id},{channel.username},{channel.title} to db")
@@ -213,11 +214,10 @@ class GroupAgent():
         # 对按摩师类型，继续调用 LLM
         if channel_type == 1:
             # 优先用新的 channel 消息
-            prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages,
-                                                                          candidate_messages[::-1])
+            prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages, candidate_messages[::-1])
             teacher_info = self.channel_agent.llm_parse_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
-                logger.info(f"Channel {channel.id},{channel.username},{channel.title} info {teacher_info}")
+                logger.info(f"Teacher {teacher_info} from channel {channel.id},{channel.username},{channel.title}")
             else:
                 logger.error(f"Failed to parse teacher info of channel {channel.id},{channel.username},{channel.title}")
                 return None

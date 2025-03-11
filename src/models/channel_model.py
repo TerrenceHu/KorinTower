@@ -21,15 +21,15 @@ class ChannelModel:
         except Error as e:
             logger.error(f"Error connecting to MySQL Database: {e}")
 
-    def add_channel(self, id: int, username: str, title: str, about: str, updated_on: date):
+    def add_channel(self, id: int, username: str, title: str, about: str, updated_date: date):
         """
         添加一个新的 channel 记录
         """
         query = '''
-        INSERT INTO channels (id, username, title, about, updated_on)
+        INSERT INTO channels (id, username, title, about, updated_date)
         VALUES (%s, %s, %s, %s, %s);
         '''
-        values = (id, username, title, about, updated_on)
+        values = (id, username, title, about, updated_date)
         if not self._execute_query(query, values):
             logger.error(f"Error adding channel {id},{username}")
 
@@ -110,14 +110,14 @@ class ChannelModel:
             return False
 
     def update_channel(self, channel_id: int, username: str, title: str,
-                       participants_count: int, updated_on: date):
+                       participants_count: int, updated_date: date):
         """
         更新指定频道
         """
         update_query = '''
-        UPDATE channels SET username = %s, title = %s, participants_count = %s, updated_on = %s WHERE id = %s;
+        UPDATE channels SET username = %s, title = %s, participants_count = %s, updated_date = %s WHERE id = %s;
         '''
-        values = (username, title, participants_count, updated_on, channel_id)
+        values = (username, title, participants_count, updated_date, channel_id)
         return self._execute_query(update_query, values)
         
     def update_channel_type(self, channel_id: int, type: int) -> bool:

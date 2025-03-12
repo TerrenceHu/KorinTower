@@ -12,6 +12,88 @@ from telethon.tl.functions.channels import GetFullChannelRequest
 from globals import *
 from models.district_model import DistrictModel
 
+
+def replace_whitespace(input_text):
+    if input_text:
+        return input_text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+    return ''
+
+def clean_json_string(data: str) -> str:
+    # 使用正则表达式匹配第一个 { 和最后一个 }
+    data = replace_whitespace(data)
+    match = re.search(r'\{.*?\}', data)
+    if match:
+        return match.group(0)
+    return None
+
+def find_usernames(input_text):
+    pattern1 = r'@([a-zA-Z0-9_]{5,})'
+    pattern2 = r't\.me/([a-zA-Z0-9_]{5,})'
+
+    matches1 = re.findall(pattern1, str(input_text))
+    matches2 = re.findall(pattern2, str(input_text))
+    matches = matches1 + matches2
+
+    match_counts = Counter(matches)
+    sorted_matches = sorted(match_counts.items(), key=lambda x: x[1], reverse=True)
+
+    return [match[0] for match in sorted_matches]
+
+# 过滤掉一些不需要的群
+def filter_group_by_title(name: str) -> bool:
+    key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
+                 u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
+                 u"广告", u"软件", u"接码", u"老店", u"机器人", u"号商", u"项目", u"公群",
+                 u"进群", u"进裙", u"会所", u"水汇", u"商K", u"KTV", u"SPA", u"体验馆",
+                 u"情趣用品", u"一条龙服务"]
+    for key_word in key_words:
+        if key_word in str(name):
+            return True
+    return False
+
+# 过滤掉一些非老师的群成员
+def filter_entity_by_title(name: str) -> bool:
+    key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
+                 u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
+                 u"广告", u"软件", u"接码", u"老店", u"机器人", u"号商", u"项目", u"公群",
+                 u"进群", u"进裙", u"会所", u"水汇", u"商K", u"KTV", u"体验馆", u"情趣用品"]
+    for key_word in key_words:
+        if key_word in str(name):
+            return True
+    return False
+
+# 过滤掉一些非老师的群成员
+def filter_entity_by_about(info: str) -> bool:
+    key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
+                 u"交易", u"客服", u"代理", u"招商", u"平台", u"主营", u"安排",
+                 u"全国", u"广告", u"软件", u"接码", u"老店", u"公群"]
+    for key_word in key_words:
+        if key_word in str(info):
+            return True
+    return False
+
+def read_prompt_template(file_path: str) -> str:
+    """读取prompt模板文件"""
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"Prompt template file not found: {file_path}")
+    with open(file_path, 'r', encoding='utf-8') as file:
+        return file.read()
+
+def remove_nsfw_keywords(text: str) -> str:
+    """从文本中删除指定的关键词"""
+    keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"龟头", u"调教", u"耳光", u"鞭打",
+                u"体位", u"后入", u"女上位", u"69", u"戴套", u"带套", u"屌感", u"吊感", u"波推", u"漫游",
+                u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM", u"sm",
+                u"丝足", u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙",
+                u"双飞", u"胸推", u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"口技",
+                u"勾引", u"全裸", u"私处", u"骚话", u"潮吹", u"潮喷", u"强奸", u"高潮", u"颜射", u"乳交",
+                u"蛋蛋", u"白虎", u"女上", u"骑乘", u"叫床", u"裸聊", u"裸照"]
+    # 使用正则表达式匹配关键词，并替换为空字符串
+    pattern = re.compile(r'(' + '|'.join(re.escape(keyword) for keyword in keywords) + r')')
+    cleaned_text = pattern.sub('', text)
+    return cleaned_text
+
+
 class ChatUtils:
     def __init__(self, client: TelegramClient, config: ConfigParser):
         self.client = client
@@ -62,9 +144,7 @@ class ChatUtils:
             return None
 
         about = full_member.full_user.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
+        return replace_whitespace(about)
 
     def get_channel_about(self, channel: Channel):
         try:
@@ -74,16 +154,15 @@ class ChatUtils:
             return None
 
         about = full_channel.full_chat.about
-        if about:
-            about = about.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        return about
+        return replace_whitespace(about)
+
 
     # 获取文本中 user、group 和 channel
     def get_chats_from(self, input_text: str):
-        chat_names = self.find_usernames(input_text)
+        chat_names = find_usernames(input_text)
         if len(chat_names) < 1:
             return None, None, None
-        
+
         user_chats, group_chats, channel_chats = [], [], []
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
@@ -115,7 +194,7 @@ class ChatUtils:
         return user_chats, group_chats, channel_chats
 
     def get_user_from_text(self, channel: Channel, text: str) -> User:
-        chat_names = self.find_usernames(text)
+        chat_names = find_usernames(text)
         logger.info(f"Fetch user from chat names {chat_names} in {text[:200]}")
         if len(chat_names) < 1:
             return None
@@ -132,7 +211,7 @@ class ChatUtils:
             # 判断 channnel 是否能挂接到这个 user 上
             if isinstance(chat, User):
                 user_about = self.get_user_about(chat)
-                if self.filter_entity_by_about(user_about):
+                if filter_entity_by_about(user_about):
                     continue
                 _, _, channel_chats = self.get_chats_from(user_about)
                 if channel_chats:
@@ -142,85 +221,4 @@ class ChatUtils:
                             logger.info(f"Got user {chat.id},{chat.username} from channel {channel.id},{channel.username}")
                             return channel_user
         return None
-
-    @staticmethod
-    def find_usernames(input_text):
-        pattern1 = r'@([a-zA-Z0-9_]{5,})'
-        pattern2 = r't\.me/([a-zA-Z0-9_]{5,})'
-
-        matches1 = re.findall(pattern1, str(input_text))
-        matches2 = re.findall(pattern2, str(input_text))
-        matches = matches1 + matches2
-
-        match_counts = Counter(matches)
-        sorted_matches = sorted(match_counts.items(), key=lambda x: x[1], reverse=True)
-
-        return [match[0] for match in sorted_matches]
-
-    @staticmethod
-    def clean_json_string(data: str) -> str:
-        # 使用正则表达式匹配第一个 { 和最后一个 }
-        data = data.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
-        match = re.search(r'\{.*?\}', data)
-        if match:
-            return match.group(0)
-        return None
-
-    # 过滤掉一些不需要的群
-    @staticmethod
-    def filter_group_by_title(name: str) -> bool:
-        key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
-                     u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
-                     u"广告", u"软件", u"接码", u"老店", u"机器人", u"号商", u"项目", u"公群",
-                     u"进群", u"进裙", u"会所", u"水汇", u"商K", u"KTV", u"SPA", u"体验馆",
-                     u"情趣用品", u"一条龙服务"]
-        for key_word in key_words:
-            if key_word in str(name):
-                return True
-        return False
-
-    # 过滤掉一些非老师的群成员
-    @staticmethod
-    def filter_entity_by_title(name: str) -> bool:
-        key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
-                     u"交易", u"客服", u"代理", u"推广", u"招商", u"平台", u"主营", u"安排",
-                     u"广告", u"软件", u"接码", u"老店", u"机器人", u"号商", u"项目", u"公群",
-                     u"进群", u"进裙", u"会所", u"水汇", u"商K", u"KTV", u"体验馆", u"情趣用品"]
-        for key_word in key_words:
-            if key_word in str(name):
-                return True
-        return False
-
-    # 过滤掉一些非老师的群成员
-    @staticmethod
-    def filter_entity_by_about(info: str) -> bool:
-        key_words = [u"赚", u"搞钱", u"日结", u"日搞", u"月入", u"红包", u"抽奖", u"彩金", u"博彩",
-                     u"交易", u"客服", u"代理", u"招商", u"平台", u"主营", u"安排",
-                     u"全国", u"广告", u"软件", u"接码", u"老店", u"公群"]
-        for key_word in key_words:
-            if key_word in str(info):
-                return True
-        return False
-
-    @staticmethod
-    def read_prompt_template(file_path: str) -> str:
-        """读取prompt模板文件"""
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"Prompt template file not found: {file_path}")
-        with open(file_path, 'r', encoding='utf-8') as file:
-            return file.read()
-
-    @staticmethod
-    def remove_nsfw_keywords(text: str) -> str:
-        """从文本中删除指定的关键词"""
-        keywords = [u"奶子", u"小穴", u"肉穴", u"蜜穴", u"乳头", u"肉棒", u"龟头", u"调教", u"耳光", u"鞭打",
-                    u"体位", u"后入", u"女上位", u"69", u"戴套", u"带套", u"屌感", u"吊感", u"波推", u"漫游",
-                    u"口活", u"口交", u"口爆", u"无T口", u"足交", u"深喉", u"舌吻", u"蛇吻", u"Sm", u"SM", u"sm",
-                    u"丝足", u"啪啪", u"爱爱", u"做爱", u"抽插", u"艹", u"陪洗", u"鸳鸯浴", u"吹箫", u"毒龙",
-                    u"双飞", u"胸推", u"臀推", u"无套", u"三点粉", u"三点", u"水中萧", u"水萧", u"马眼", u"口技",
-                    u"勾引", u"全裸", u"私处", u"骚话", u"潮吹", u"潮喷", u"强奸", u"高潮", u"颜射", u"乳交",
-                    u"蛋蛋", u"白虎", u"女上", u"骑乘", u"叫床", u"裸聊", u"裸照"]
-        # 使用正则表达式匹配关键词，并替换为空字符串
-        pattern = re.compile(r'(' + '|'.join(re.escape(keyword) for keyword in keywords) + r')')
-        cleaned_text = pattern.sub('', text)
-        return cleaned_text
+    

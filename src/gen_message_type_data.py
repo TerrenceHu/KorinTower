@@ -4,7 +4,7 @@ from http import HTTPStatus
 from loguru import logger
 
 import dashscope
-from utils.chat_utils import ChatUtils
+from utils.chat_utils import *
 
 
 logger.add(
@@ -50,7 +50,7 @@ def main() -> None:
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse feedback wrong code for {message}: {response}")
             continue
-        feedback_data = ChatUtils.clean_json_string(response.output.choices[0].message.content)
+        feedback_data = clean_json_string(response.output.choices[0].message.content)
         if feedback_data is None or not feedback_data:
             logger.error(f"LLM response empty for {message}")
             continue

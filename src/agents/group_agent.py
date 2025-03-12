@@ -6,11 +6,11 @@ from loguru import logger
 from telethon.sync import TelegramClient
 from telethon.tl.functions.channels import JoinChannelRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest
-from telethon.tl.types import User, Channel, ChannelForbidden
+from telethon.tl.types import User, Channel, ChannelForbidden, Message
 from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyParticipantError
 
 from globals import *
-from utils.chat_utils import ChatUtils
+from utils.chat_utils import *
 
 from agents.channel_agent import ChannelAgent
 from models.group_model import GroupModel
@@ -114,22 +114,9 @@ class GroupAgent():
             # offset_date is used to get messages prior to that date
             messages = self.client.iter_messages(id, offset_date=today)
 
-            '''
-            # TODO:写入文件或者数据库
-            f = open("data/%s.%s.messages" % (name, str(yesterday_date)), 'w', encoding='utf-8-sig')
-            csv_writer = csv.writer(f)
-            csv_writer.writerow(["date", "sender", "message"])
-
             for message in messages:
-                if message.date <= yesterday:
-                    break
-                csv_writer.writerow([str(message.date),
-                                    str(utils.get_display_name(message.sender)),
-                                    str(message.message).replace('\r', '').replace('\n', '').replace('\t', '')]
-                                    )
-            else:
-                f.close()
-            '''
+                replace_whitespace(message.message)
+            
         self.group_model.update_group_date(id, today_date)
 
     def process_user(self, user: User, context_city: str):
@@ -137,8 +124,7 @@ class GroupAgent():
         # TODO: 可能用户信息会更新，需要重新爬取
         if user.bot:
             return None
-        if self.chat_utils.filter_entity_by_title(user.first_name) \
-            or self.chat_utils.filter_entity_by_title(user.last_name):
+        if filter_entity_by_title(user.first_name) or filter_entity_by_title(user.last_name):
             logger.info(f"Filter user {user.username}{user.first_name},{user.last_name}")
             return None
         if user.first_name == "" and user.last_name == "" and user.username == "":
@@ -149,7 +135,7 @@ class GroupAgent():
 
         # 获取用户的 info，并根据 info 再次过滤广告号
         about = self.chat_utils.get_user_about(user)
-        if self.chat_utils.filter_entity_by_about(about):
+        if filter_entity_by_about(about):
             return None
 
         self.user_model.add_user(user.id, user.username, user.first_name, user.last_name, about)
@@ -176,12 +162,12 @@ class GroupAgent():
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
         # 过滤广告 channel
-        if self.chat_utils.filter_entity_by_title(channel.title):
+        if filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by title")
             return None
         # 获取 channel 的 info，并根据 info 再次过滤广告号
         channel_about = self.chat_utils.get_channel_about(channel)
-        if self.chat_utils.filter_entity_by_about(channel_about):
+        if filter_entity_by_about(channel_about):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by about")
             return None
 
@@ -242,18 +228,17 @@ class GroupAgent():
 
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
-            pinned_messages, candidate_messages = self.channel_agent.fetch_nav_channel_messages(channel, limit=1000)
-            messages_text = ' ' . join(pinned_messages +  candidate_messages)
-            channel_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
+            messages, channel_city = self.channel_agent.fetch_nav_channel_messages(channel, limit=100, reverse=False)
             if channel_city:
                 context_city = channel_city
-            for message_text in pinned_messages + candidate_messages:
-                self.process_message(channel, context_city, message_text)
+
+            for message in messages:
+                self.process_message(channel, context_city, message)
         return None
 
-    def process_message(self, channel: Channel, context_city: str, message_text: str):
-        logger.info(f"Processing message {message_text} from {channel.id},{channel.username},{context_city}")
-        usernames = self.chat_utils.find_usernames(message_text)
+    def process_message(self, channel: Channel, context_city: str, message: Message):
+        message_text = message.message
+        usernames = find_usernames(message_text)
         if len(usernames) < 1:
             return
         logger.info(f"Process usernames {usernames} from message")
@@ -308,7 +293,7 @@ class GroupAgent():
         if group.participants_count != None and group.participants_count < 1000:
             logger.info(f"Too few members in group {group.id},{group.username},{group.title}")
             return
-        if self.chat_utils.filter_group_by_title(group.title):
+        if filter_group_by_title(group.title):
             logger.info(f"Filter ad group {group.id},{group.username},{group.title}")
             return
         if self.group_model.does_group_exist(group.id):
@@ -348,8 +333,7 @@ class GroupAgent():
             except Exception as e:
                 logger.error(f"Failed to get messages of group {group.id},{group.username},{group.title}: {e}")
             else:
-                messages_text = ' ' . join([ message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') 
-                                 for message in messages if message.message ])
+                messages_text = ' ' . join([ replace_whitespace(message.message) for message in messages if message.message ])
                 message_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
                 if message_city:
                     group_city = message_city

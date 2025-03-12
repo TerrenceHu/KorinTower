@@ -11,7 +11,7 @@ import dashscope
 from telethon.sync import TelegramClient
 from telethon.tl.types import User, Channel, Message, MessageMediaPhoto
 
-from utils.chat_utils import ChatUtils
+from utils.chat_utils import *
 from models.channel_model import ChannelModel
 from models.teacher_model import TeacherModel
 from models.district_model import DistrictModel
@@ -41,13 +41,13 @@ class ChannelAgent():
 
         type_prompt_template_file = 'config/type_prompt_template.txt'
         try:
-            self.type_prompt_template = self.chat_utils.read_prompt_template(type_prompt_template_file)
+            self.type_prompt_template = read_prompt_template(type_prompt_template_file)
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {type_prompt_template_file}")
 
         info_prompt_template_file = 'config/info_prompt_template.txt'
         try:
-            self.info_prompt_template = self.chat_utils.read_prompt_template(info_prompt_template_file)
+            self.info_prompt_template = read_prompt_template(info_prompt_template_file)
         except FileNotFoundError as e:
             logger.error(f"Prompt template file not found: {info_prompt_template_file}")
 
@@ -91,7 +91,7 @@ class ChannelAgent():
                     reactions += result.count
 
             # 只识别pinned消息中图片的文字信息
-            message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') if message.message else ''
+            message_text = replace_whitespace(message.message)
             if message.pinned:
                 if isinstance(message.media, MessageMediaPhoto):
                     photo_text = self.parse_photo_text(message.media, channel.id, message.id)
@@ -119,32 +119,13 @@ class ChannelAgent():
         try:
             messages = self.client.get_messages(channel.id, limit=limit, reverse=reverse)
         except Exception as e:
+            logger.error(f"Failed to fetch messages for nav channel {channel.id},{channel.username}: {e}")
             return None, None
-
-        pinned_messages, candidate_messages = [], []
-        for message in messages:
-            if not message.message and not message.pinned:
-                continue
-            # 消息是否可评论、回复数、点赞数、浏览数
-            comments, replies, reactions, views = False, 0, 0, message.views
-            if message.replies:
-                comments = message.replies.comments
-                replies = message.replies.replies
-            if message.reactions:
-                for result in message.reactions.results:
-                    reactions += result.count
-
-            # 只识别pinned消息中图片的文字信息
-            message_text = message.message.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ') if message.message else ''
-            if message.pinned:
-                pinned_messages.append(message_text)
-            else:
-                candidate_messages.append(message_text)
-
-            self.channel_model.add_message_to_channel(channel.id, message.id, message_text, message.pinned,
-                                                      comments, replies, reactions, views, message.date)
-
-        return pinned_messages, candidate_messages
+            
+        messages_text = ' ' . join([replace_whitespace(message.message) for message in messages])
+        channel_city = self.chat_utils.get_city_from_text(messages_text, threshold=3)
+        
+        return messages, channel_city
     
     # 为了控制 prompt 的 token 数，优先用pinned消息，再用其他消息
     def get_prompt_from_messages(self, pinned_messages, candidate_messages):
@@ -189,8 +170,8 @@ class ChannelAgent():
         
         if response.status_code != HTTPStatus.OK:
             logger.error(f"LLM parse type wrong code: {response}")
-            system_prompt = self.type_prompt_template % (self.chat_utils.remove_nsfw_keywords(content))
-            logger.info(self.chat_utils.remove_nsfw_keywords(content))
+            system_prompt = self.type_prompt_template % (remove_nsfw_keywords(content))
+            logger.info(remove_nsfw_keywords(content))
             messages = [
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': ''}
@@ -245,7 +226,7 @@ class ChannelAgent():
             logger.error(f"LLM parse info wrong code for {channel.id},{channel.username},{channel.title}: {response}")
             
             logger.info(content)
-            safe_content = self.chat_utils.remove_nsfw_keywords(content)
+            safe_content = remove_nsfw_keywords(content)
             system_prompt = self.info_prompt_template % (title, safe_content)
             logger.info(safe_content)
             
@@ -269,7 +250,7 @@ class ChannelAgent():
                 return None
 
         info_data = response.output.choices[0].message.content
-        info_data = self.chat_utils.clean_json_string(info_data)
+        info_data = clean_json_string(info_data)
         if info_data is None or not info_data:
             logger.error(f"LLM response empty for {channel.id},{channel.username},{channel.title}")
             return None

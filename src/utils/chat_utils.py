@@ -15,7 +15,8 @@ from models.district_model import DistrictModel
 
 def replace_whitespace(input_text):
     if input_text:
-        return input_text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        input_text = input_text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ')
+        return re.sub(r'\s+', ' ', input_text)
     return ''
 
 def clean_json_string(data: str) -> str:
@@ -168,7 +169,6 @@ class ChatUtils:
             if chat_name.lower().endswith("bot"):
                 continue
             if chat_name in processed_usernames:
-                logger.info(f"Already checked chat {chat_name}")
                 continue
             processed_usernames[chat_name] = 1
 

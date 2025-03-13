@@ -18,9 +18,7 @@ CREATE TABLE kt.user_channels (
 	user_id BIGINT NOT NULL,
 	channel_id BIGINT NOT NULL,
 	updated_date DATE,
-	PRIMARY KEY (user_id, channel_id),
-	INDEX idx_user_id (user_id),
-	INDEX idx_channel_id (channel_id),
+	PRIMARY KEY (user_id, channel_id)
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4
@@ -109,6 +107,19 @@ CREATE TABLE kt.teachers_info (
     service VARCHAR(255),
     FOREIGN KEY (id) REFERENCES kt.teachers(id) ON DELETE CASCADE
 );
+
+DROP TABLE IF EXISTS kt.teachers_reports;
+CREATE TABLE kt.teachers_reports (
+    id BIGINT PRIMARY KEY,
+    channel_id BIGINT NOT NULL,
+    message_id BIGINT NOT NULL,
+    type INT DEFAULT 0,
+    dt DATETIME,
+    FOREIGN KEY (id) REFERENCES kt.teachers(id) ON DELETE CASCADE
+)
+ENGINE=InnoDB
+DEFAULT CHARSET=utf8mb4
+COLLATE=utf8mb4_general_ci;
 
 --------------------------------
 -- districts

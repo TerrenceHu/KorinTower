@@ -8,7 +8,7 @@ from utils.chat_utils import *
 
 
 logger.add(
-    "kt.log",
+    "crawler.log",
     level="INFO",
     format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
     encoding="utf-8"
@@ -17,7 +17,7 @@ logger.add(
 def main() -> None:
     feedback_prompt_template_file = 'config/feedback_prompt_template.txt'
     try:
-        feedback_prompt_template = ChatUtils.read_prompt_template(feedback_prompt_template_file)
+        feedback_prompt_template = read_prompt_template(feedback_prompt_template_file)
     except FileNotFoundError as e:
         logger.error(f"Prompt template file not found: {feedback_prompt_template_file}")
         return

@@ -8,7 +8,7 @@ from agents.group_agent import GroupAgent
 
 
 logger.add(
-    "kt.log",
+    "crawler.log",
     level="INFO",
     format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
     encoding="utf-8"
@@ -21,13 +21,13 @@ def test_group(client: TelegramClient, config: ConfigParser) -> None:
 
 def test_channel(client: TelegramClient, config: ConfigParser) -> None:
     group_agent = GroupAgent(client, config)
-    channel = client.get_entity("shenzhen_youyou")
-    teacher = group_agent.process_channel(channel, '')
+    channel = client.get_entity("MuGUChannel")
+    group_agent.process_channel(channel, '')
 
 def main() -> None:
     # 读取配置
     config = ConfigParser()
-    config.read('config/kt_config.ini')
+    config.read('config/crawler_config.ini')
 
     username = config.get('TG', 'username')
     phone = config.get('TG', 'phone')

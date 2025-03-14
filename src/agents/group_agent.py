@@ -247,7 +247,7 @@ class GroupAgent():
         logger.info(f"Process usernames {usernames} from message {message_text[:200]}")
 
         # 类别0：消息不是服务反馈；类别1：消息是正向反馈；类别2：消息是负向反馈
-        message_type = self.text_processor.predict(message_text)
+        message_type = int(self.text_processor.predict(message_text))
         logger.info(f"Message {message_text[:200]} type {message_type}")
 
         for username in usernames:

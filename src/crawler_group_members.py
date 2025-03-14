@@ -16,7 +16,7 @@ logger.add(
 def main() -> None:
     # 读取配置
     config = ConfigParser()
-    config.read('config/kt_config.ini')
+    config.read('config/crawler_config.ini')
 
     username = config.get('TG', 'username')
     phone = config.get('TG', 'phone')

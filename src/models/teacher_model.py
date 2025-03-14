@@ -1,5 +1,5 @@
 from loguru import logger
-from datetime import date
+from datetime import date, datetime
 
 import mysql.connector
 from mysql.connector import Error
@@ -123,6 +123,27 @@ class TeacherModel:
         except Error as e:
             logger.error(f"Error deleting teacher {id}: {e}")
 
+    def add_report(self, teacher_id: int, channel_id: int, message_id: int, type: int, dt: datetime):
+        """
+        创建一个新的 report 记录
+        """
+        query = '''
+        INSERT INTO kt.teachers_reports (
+            teacher_id, channel_id, message_id, type, dt
+        ) VALUES (%s, %s, %s, %s, %s);
+        '''
+        values = (teacher_id, channel_id, message_id, type, dt)
+        if not self._execute_query(query, values):
+            logger.error(f"Failed to add report {channel_id},{message_id} for teacher {teacher_id}")
+
+    def get_reports_by_teacher_id(self, teacher_id: int):
+        query = '''
+        SELECT * FROM kt.teachers_reports WHERE teacher_id = %s;
+        '''
+        values = (teacher_id,)
+        if not self._execute_query(query, values):
+            logger.error(f"Failed to get reports by teacher id {teacher_id}")
+        
     def _execute_query(self, query, values) -> bool:
         """
         Execute a query with optional parameters.

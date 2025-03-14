@@ -132,14 +132,15 @@ class ChannelAgent():
         prompt_messages = []
         prompt_len = 0
         for message_text in pinned_messages:
+            if len(message_text) > 300:
+                message_text = message_text[:150] + '...' + message_text[-150:]
             prompt_messages.append(message_text)
             prompt_len += len(message_text)
             if prompt_len >= 3000:
                 break
         for message_text in candidate_messages:
-            # 太长的消息不加入prompt
-            if len(message_text) > 1000:
-                continue
+            if len(message_text) > 300:
+                message_text = message_text[:150] + '...' + message_text[-150:]
             prompt_messages.append(message_text)
             prompt_len += len(message_text)
             if prompt_len >= 3000:

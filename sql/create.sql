@@ -110,12 +110,12 @@ CREATE TABLE kt.teachers_info (
 
 DROP TABLE IF EXISTS kt.teachers_reports;
 CREATE TABLE kt.teachers_reports (
-    id BIGINT PRIMARY KEY,
+    teacher_id BIGINT PRIMARY KEY,
     channel_id BIGINT NOT NULL,
     message_id BIGINT NOT NULL,
     type INT DEFAULT 0,
     dt DATETIME,
-    FOREIGN KEY (id) REFERENCES kt.teachers(id) ON DELETE CASCADE
+    FOREIGN KEY (teacher_id) REFERENCES kt.teachers(id) ON DELETE CASCADE
 )
 ENGINE=InnoDB
 DEFAULT CHARSET=utf8mb4

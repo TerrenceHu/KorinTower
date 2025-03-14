@@ -157,9 +157,9 @@ class GroupAgent():
                 if not self.user_model.is_channel_on_user(user.id, channel.id):
                     self.user_model.add_channel_on_user(user.id, channel.id, today_date)
                     logger.info(f"Add channel {channel.id},{channel.username} on user {user.id},{user.username}")
-                teacher = self.process_channel(channel, user_city, user)
-                if teacher:
-                    return teacher
+                teacher_id = self.process_channel(channel, user_city, user)
+                if teacher_id:
+                    return teacher_id
         return None
 
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
@@ -227,7 +227,7 @@ class GroupAgent():
                 else:
                     self.channel_agent.norm_and_add_teacher(channel, user_of_channel, teacher_info)
                     logger.info(f"Add new teacher {user_of_channel.id},{user_of_channel.username}")
-                return self.teacher_model.get_teacher_by_id(channel.id)
+                return user_of_channel.id
 
         # 对导航类型，继续解析 channel 消息
         elif channel_type == 2:
@@ -272,11 +272,12 @@ class GroupAgent():
                 logger.error(f"Failed to get_entity {username}: {e}")
                 continue
 
-            user_teacher, channel_teacher = None, None
+            teacher_from_user, teacher_from_channel = None, None
             # 如果是 User
             if isinstance(chat, User):
                 logger.info(f"Chat {username} is a user")
-                user_teacher = self.process_user(chat, context_city)
+                teacher_from_user = self.process_user(chat, context_city)
+                logger.info(f"teacher_from_user {teacher_from_user} for {username}")
             # 如果是 Group
             elif chat.megagroup == True:
                 logger.info(f"Chat {username} is a group")
@@ -284,11 +285,17 @@ class GroupAgent():
             # 如果是 Channel
             else:
                 logger.info(f"Chat {username} is a channel")
-                channel_teacher = self.process_channel(chat, context_city)
+                teacher_from_channel = self.process_channel(chat, context_city)
+                logger.info(f"teacher_from_channel {teacher_from_channel} for {username}")
             
-            if user_teacher:
-                # TODO: 把feedback 存到数据库中
-                logger.info(f"Teacher {user_teacher.id} {user_teacher.name} {channel.id} {message.id}")
+            # 把 report 存到数据库中
+            if message_type == 1 or message_type == 2:
+                if teacher_from_user:
+                    self.teacher_model.add_report(teacher_from_user, channel.id, message.id, message_type, message.date)
+                    logger.info(f"Add report {channel.id},{message.id} for teacher {teacher_from_user}")
+                elif teacher_from_channel:
+                    self.teacher_model.add_report(teacher_from_channel, channel.id, message.id, message_type, message.date)
+                    logger.info(f"Add report {channel.id},{message.id} for teacher {teacher_from_channel}")
 
     def process_group(self, group: Channel):
         if isinstance(group, ChannelForbidden):

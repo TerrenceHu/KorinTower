@@ -6,8 +6,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
+from agents.teacher_agent import TeacherAgent
 from models.district_model import DistrictModel
-from models.teacher_model import TeacherModel
 from utils.bot_utils import *
 
 
@@ -22,8 +22,7 @@ class StudentBot:
         self.db_database = config.get('DATABASE', 'db_database')
         self.district_model = DistrictModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
-        self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
-                                          password=self.db_password, database=self.db_database)
+        self.teacher_agent = TeacherAgent(config)
 
         self.opening_line = dedent("""
         👙 <b>我会什么</b> 👙
@@ -34,8 +33,6 @@ class StudentBot:
         1.「我要出击」：按位置、价格筛选，并查看报告，发现心仪的老师😍
         2.「提交报告」：出击后请及时提交报告，造福同学们🙏
         3.「打赏作者」：兄弟们，用根烟钱支持一下呗🤝
-
-        更多功能敬请期待！使用反馈可联系 @roshihero
         ⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️
         """)
         # 初始化分页参数，每页显示10条
@@ -90,22 +87,25 @@ class StudentBot:
             logger.error("Invalid city id in {query.data} for {user.id},{user.username}")
             return
 
-        effective_teachers = self.teacher_model.get_effective_teachers_by_city(city_id)
-        logger.info(f"{len(effective_teachers)} effective teachers in {city_id},{city_name}")
+        teachers = self.teacher_agent.get_teachers_by_city(city_id)
+        reports_of_teachers = self.teacher_agent.get_reports_of_teachers(teachers)
+        logger.info(f"{len(teachers)} effective teachers in {city_id},{city_name}")
 
         # 一个城市的 teacher 太多，分区域检索
-        if len(effective_teachers) > 100:
+        if len(teachers) > 100:
             districts = self.district_model.get_districts_of_city(city_id)
             district_keyboard = self._show_district_keyboard(districts)
             reply_markup = InlineKeyboardMarkup(district_keyboard)
             response = f"「{city_name}」老师太多啦，请选择具体区域："
             await query.message.reply_html(response, reply_markup=reply_markup)
         else:
-            total_pages = (len(effective_teachers) - 1) // self.page_size + 1
+            total_pages = (len(teachers) - 1) // self.page_size + 1
+            total_pages = max(total_pages, 1)
             # 保存关键数据到上下文
             context.user_data.update({
                 "current_city": city_name,
-                "teachers": effective_teachers,
+                "teachers": teachers,
+                "reports": reports_of_teachers,
                 "page_size": self.page_size,
                 "current_page": 0,
                 "total_pages": total_pages,
@@ -124,14 +124,17 @@ class StudentBot:
             logger.error("Invalid district id in {query.data} for {user.id},{user.username}")
             return
     
-        effective_teachers = self.teacher_model.get_effective_teachers_by_district(district_id)
-        logger.info(f"{len(effective_teachers)} effective teachers in {district_id},{district_name}")
+        teachers = self.teacher_agent.get_teachers_by_district(district_id)
+        reports_of_teachers = self.teacher_agent.get_reports_of_teachers(teachers)
+        logger.info(f"{len(teachers)} effective teachers in {district_id},{district_name}")
 
-        total_pages = (len(effective_teachers) - 1) // self.page_size + 1
+        total_pages = (len(teachers) - 1) // self.page_size + 1
+        total_pages = max(total_pages, 1)
         # 保存关键数据到上下文
         context.user_data.update({
             "current_district": district_name,
-            "teachers": effective_teachers,
+            "teachers": teachers,
+            "reports": reports_of_teachers,
             "page_size": self.page_size,
             "current_page": 0,
             "total_pages": total_pages,
@@ -176,9 +179,16 @@ class StudentBot:
         response = f"<b>「{current_district}」热门老师</b>（第 {current_page + 1}/{total_pages} 页）\n"
         response += "-------------------------\n"
         for teacher in current_teachers:
-            username, name = teacher[0], teacher[1]
+            id, username, name = teacher[0], teacher[1], teacher[2]
+            reports = data['reports'][id]
             response += f"👱‍♀️ <b>{format_name_with_wcwidth(name, 12)}</b>私聊：@{username}\n"
-            response += f"      <a href='https://t.me/Fde123jilu/6'>查看报告</a>\n"
+            for idx, report in enumerate(reports):
+                if idx == 0:
+                    response += f"      <a href='https://t.me/{report[2]}/{report[3]}'>报告{idx + 1}</a>\n"
+                else:
+                    response += f"  <a href='https://t.me/{report[2]}/{report[3]}'>报告{idx + 1}</a>\n"
+                if idx >= 5:
+                    break
 
         # 构建翻页按钮
         buttons = []

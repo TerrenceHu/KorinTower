@@ -291,10 +291,10 @@ class GroupAgent():
             # 把 report 存到数据库中
             if message_type == 1 or message_type == 2:
                 if teacher_from_user:
-                    self.teacher_model.add_report(teacher_from_user, channel.id, message.id, message_type, message.date)
+                    self.teacher_model.add_report(teacher_from_user, channel.id, channel.username, message.id, message_type, message.date)
                     logger.info(f"Add report {channel.id},{message.id} for teacher {teacher_from_user}")
                 elif teacher_from_channel:
-                    self.teacher_model.add_report(teacher_from_channel, channel.id, message.id, message_type, message.date)
+                    self.teacher_model.add_report(teacher_from_channel, channel.id, channel.username, message.id, message_type, message.date)
                     logger.info(f"Add report {channel.id},{message.id} for teacher {teacher_from_channel}")
 
     def process_group(self, group: Channel):

@@ -108,12 +108,14 @@ CREATE TABLE kt.teachers_info (
     FOREIGN KEY (id) REFERENCES kt.teachers(id) ON DELETE CASCADE
 );
 
-DROP TABLE IF EXISTS kt.teachers_reports;
-CREATE TABLE kt.teachers_reports (
+DROP TABLE IF EXISTS kt.reports;
+CREATE TABLE kt.reports (
     teacher_id BIGINT PRIMARY KEY,
     channel_id BIGINT NOT NULL,
+    username VARCHAR(100),
     message_id BIGINT NOT NULL,
     type INT DEFAULT 0,
+    status INT DEFAULT 0,
     dt DATETIME,
     FOREIGN KEY (teacher_id) REFERENCES kt.teachers(id) ON DELETE CASCADE
 )

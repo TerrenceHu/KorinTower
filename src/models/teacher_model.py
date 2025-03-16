@@ -72,7 +72,7 @@ class TeacherModel:
         """
         获取某城市中所有 teachers 记录
         """
-        select_query = "SELECT DISTINCT username, name FROM teachers where status = 0 and city_id = %s"
+        select_query = "SELECT * FROM teachers where status = 0 and city_id = %s"
         values = (city_id,)
         try:
             self.cursor.execute(select_query, values)
@@ -84,7 +84,7 @@ class TeacherModel:
         """
         获取某区域中所有 teachers 记录
         """
-        select_query = "SELECT DISTINCT username, name FROM teachers where status = 0 and district_id = %s"
+        select_query = "SELECT * FROM teachers where status = 0 and district_id = %s"
         values = (district_id,)
         try:
             self.cursor.execute(select_query, values)
@@ -123,30 +123,28 @@ class TeacherModel:
         except Error as e:
             logger.error(f"Error deleting teacher {id}: {e}")
 
-    def add_report(self, teacher_id: int, channel_id: int, message_id: int, type: int, dt: datetime):
+    def add_report(self, teacher_id: int, channel_id: int, username: str, message_id: int, type: int, dt: datetime):
         """
         创建一个新的 report 记录
         """
         query = '''
-        INSERT INTO teachers_reports (teacher_id, channel_id, message_id, type, dt)
-        VALUES (%s, %s, %s, %s, %s);
+        INSERT INTO reports (teacher_id, channel_id, username, message_id, type, dt)
+        VALUES (%s, %s, %s, %s, %s, %s);
         '''
-        values = (teacher_id, channel_id, message_id, type, dt)
+        values = (teacher_id, channel_id, username, message_id, type, dt)
         if not self._execute_query(query, values):
-            logger.error(f"Failed to add report {channel_id},{message_id} for teacher {teacher_id}")
-    
-    def get_reports_by_teacher_id(self, teacher_id: int):
-        query = '''
-        SELECT * FROM kt.teachers_reports WHERE teacher_id = %s;
-        '''
-        values = (teacher_id,)
-        if not self._execute_query(query, values):
+            logger.error(f"Failed to add report {channel_id},{username},{message_id} for teacher {teacher_id}")
+
+    def get_reports_by_teacher_id(self, teacher_id: int):        
+        query = "SELECT * FROM reports WHERE teacher_id = %s;"
+        try:
+            self.cursor.execute(query, (teacher_id,))
+            return self.cursor.fetchall()
+        except Error as e:
             logger.error(f"Failed to get reports by teacher id {teacher_id}")
-        
+            return []
+
     def _execute_query(self, query, values) -> bool:
-        """
-        Execute a query with optional parameters.
-        """
         try:
             self.cursor.execute(query, values)
             self.connection.commit()

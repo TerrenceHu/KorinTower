@@ -1,7 +1,6 @@
 import os
 import json
 from datetime import date
-from typing import List
 from http import HTTPStatus
 from configparser import ConfigParser
 from loguru import logger
@@ -59,7 +58,7 @@ class ChannelAgent():
             return []
         return messages
 
-    def _deduplicate_messages(self, messages: List[Message]):
+    def _deduplicate_messages(self, messages: list[Message]):
         seen = set()
         unique_messages = []
         for msg in messages:

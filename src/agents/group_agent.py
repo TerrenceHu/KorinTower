@@ -313,12 +313,6 @@ class GroupAgent():
             return
         if self.group_model.does_group_exist(group.id):
             logger.info(f"Already added group {group.id},{group.username},{group.title}")
-            # group 的 username 和 title 可能会变化，需要更新
-            group_item = self.group_model.get_group_by_id(group.id)
-            if group.username != group_item[1] or group.title != group_item[2]:
-                self.group_model.update_group(group.id, group.username, group.title,
-                                                  group.participants_count, today_date)
-                logger.info(f"Update group {group.id},{group.username},{group.title}")
             return
         
         self.group_model.add_group(group.id, group.username, group.title, group.participants_count, today_date)

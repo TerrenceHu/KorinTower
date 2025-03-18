@@ -25,13 +25,20 @@ class TeacherAgent():
         teachers = self.teacher_model.get_effective_teachers_by_district(district_id)
         return teachers
 
-    def get_reports_of_teachers(self, teachers):
-        reports_of_teachers = {}
-        for teacher in teachers:
-            teacher_id = teacher[0]
-            reports_of_teachers[teacher_id] = self.get_reports_by_teacher_id(teacher_id)
-        return reports_of_teachers
+    def get_reports_by_teacher_id(self, teacher_ids):
+        if not teacher_ids:
+            logger.warning("No teacher IDs provided for report retrieval")
+            return {}
+        
+        reports = self.teacher_model.get_reports_by_teacher_id(teacher_ids)
 
-    def get_reports_by_teacher_id(self, teacher_id):
-        reports = self.teacher_model.get_reports_by_teacher_id(teacher_id)
-        return reports
+        reports_dict = {teacher_id: [] for teacher_id in teacher_ids}
+        for report in reports:
+            teacher_id = report[0]
+            reports_dict[teacher_id].append(report)
+        
+        return reports_dict
+
+
+
+        

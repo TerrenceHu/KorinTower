@@ -11,6 +11,7 @@ from telethon.sync import TelegramClient
 from telethon.tl.types import User, Channel, Message, MessageMediaPhoto
 
 from utils.chat_utils import *
+from models.user_model import UserModel
 from models.channel_model import ChannelModel
 from models.teacher_model import TeacherModel
 from models.district_model import DistrictModel
@@ -25,6 +26,8 @@ class ChannelAgent():
         self.db_user = config.get('DATABASE', 'db_user')
         self.db_password = config.get('DATABASE', 'db_password')
         self.db_database = config.get('DATABASE', 'db_database')
+        self.user_model = UserModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
         self.channel_model = ChannelModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
         self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
@@ -131,15 +134,13 @@ class ChannelAgent():
         prompt_messages = []
         prompt_len = 0
         for message_text in pinned_messages:
-            if len(message_text) > 300:
-                message_text = message_text[:150] + '...' + message_text[-150:]
             prompt_messages.append(message_text)
             prompt_len += len(message_text)
             if prompt_len >= 3000:
                 break
         for message_text in candidate_messages:
-            if len(message_text) > 300:
-                message_text = message_text[:150] + '...' + message_text[-150:]
+            if len(message_text) > 400:
+                message_text = message_text[:200] + '...' + message_text[-200:]
             prompt_messages.append(message_text)
             prompt_len += len(message_text)
             if prompt_len >= 3000:
@@ -262,7 +263,7 @@ class ChannelAgent():
             return None
         return info
 
-    def norm_and_add_teacher(self, channel: Channel, user_of_channel: User, teacher_info: dict):
+    def norm_and_add_teacher(self, channel: Channel, user: User, teacher_info: dict):
         name, city, district, age, price, price1, height, weight, measurement, service = (
                         teacher_info.get("name"),
                         teacher_info.get("city"),
@@ -279,8 +280,12 @@ class ChannelAgent():
         city_id = self.district_model.get_city_id_by_name(city)
         district_id = self.district_model.get_district_id_by_name(district, city_id)
         logger.info(f"{teacher_info},{city_id},{district_id}")
+
+        channel_ids = self.user_model.get_channels_of_user(user.id)
+        logger.info(f"---------{channel_ids}")
+
         
-        self.teacher_model.add_teacher(user_of_channel.id, user_of_channel.username,
+        self.teacher_model.add_teacher(user.id, user.username,
                                        name, city_id, district_id, price, price1,
                                        age, height, weight, measurement, service,
                                        today_date)

@@ -198,11 +198,9 @@ class ChatUtils:
 
     def get_user_from_text(self, channel: Channel, text: str) -> User:
         chat_names = find_usernames(text)
-        logger.info(f"Fetch user from chat names {chat_names} in {text[:200]}")
         if len(chat_names) < 1:
             return None
 
-        channel_user = None
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
@@ -220,8 +218,6 @@ class ChatUtils:
                 if channel_chats:
                     for channel_chat in channel_chats:
                         if channel.username == channel_chat.username:
-                            channel_user = chat
-                            logger.info(f"Got user {chat.id},{chat.username} from channel {channel.id},{channel.username}")
-                            return channel_user
+                            return chat
         return None
     

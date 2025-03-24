@@ -211,8 +211,10 @@ class GroupAgent():
             # 从 about 中获取 channel 归属的 user；若失败，再从 channel 内容中获取
             if user_of_channel == None:
                 user_of_channel = self.chat_utils.get_user_from_text(channel, channel_about)
+                logger.info(f"Fetched user {user_of_channel} for channel {channel.id},{channel.username} in {channel_about[:200]}")
             if user_of_channel == None:
                 user_of_channel = self.chat_utils.get_user_from_text(channel, prompt_content)
+                logger.info(f"Fetched user {user_of_channel} for channel {channel.id},{channel.username} in {prompt_content[:200]}")
             if user_of_channel == None:
                 logger.error(f"Failed to find user of channel {channel.id},{channel.username},{channel.title}")
                 return None
@@ -248,7 +250,7 @@ class GroupAgent():
 
         # 类别0：消息不是服务反馈；类别1：消息是正向反馈；类别2：消息是负向反馈
         message_type = int(self.text_processor.predict(message_text))
-        logger.info(f"Message {message_text[:200]} type {message_type}")
+        logger.info(f"Message {message_text[:200]} is type {message_type}")
 
         for username in usernames:
             if username.lower().endswith("bot"):
@@ -275,16 +277,13 @@ class GroupAgent():
             teacher_from_user, teacher_from_channel = None, None
             # 如果是 User
             if isinstance(chat, User):
-                logger.info(f"Chat {username} is a user")
                 teacher_from_user = self.process_user(chat, context_city)
                 logger.info(f"teacher_from_user {teacher_from_user} for {username}")
             # 如果是 Group
             elif chat.megagroup == True:
-                logger.info(f"Chat {username} is a group")
                 self.process_group(chat)
             # 如果是 Channel
             else:
-                logger.info(f"Chat {username} is a channel")
                 teacher_from_channel = self.process_channel(chat, context_city)
                 logger.info(f"teacher_from_channel {teacher_from_channel} for {username}")
             

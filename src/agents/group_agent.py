@@ -154,7 +154,7 @@ class GroupAgent():
         if user_city == None:
             user_city = context_city
 
-        user_chats, group_chats, channel_chats = self.chat_utils.get_chats_from(about)
+        _, group_chats, channel_chats = self.chat_utils.get_chats_from(about)
         if group_chats:
             for group_chat in group_chats:
                 self.process_group(group_chat)
@@ -164,6 +164,7 @@ class GroupAgent():
                     self.user_model.add_channel_on_user(user.id, channel.id, today_date)
                     logger.info(f"Add channel {channel.id},{channel.username} on user {user.id},{user.username}")
                 teacher_id = self.process_channel(channel, user_city, user)
+                # TODO: 一个user对应多个channel，这里只用了第一个channel，可能不是信息最全的channel
                 if teacher_id:
                     return teacher_id
         return None
@@ -214,7 +215,7 @@ class GroupAgent():
             prompt_content = self.channel_agent.get_prompt_from_messages(pinned_messages, candidate_messages[::-1])
             teacher_info = self.channel_agent.llm_parse_teacher_info(channel, context_city, prompt_content)
             if teacher_info:
-                logger.info(f"Teacher {teacher_info} from channel {channel.id},{channel.username},{channel.title}")
+                logger.info(f"Got teacher {teacher_info} from channel {channel.id},{channel.username},{channel.title}")
             else:
                 logger.error(f"Failed to parse teacher info of channel {channel.id},{channel.username},{channel.title}")
                 return None
@@ -257,7 +258,7 @@ class GroupAgent():
         usernames = find_usernames(message_text)
         if len(usernames) < 1:
             return
-        logger.info(f"Process usernames {usernames} from message {message_text[:200]}")
+        logger.info(f"Got usernames {usernames} from message {message_text[:200]}")
 
         # 类别0：消息不是服务反馈；类别1：消息是正向反馈；类别2：消息是负向反馈
         message_type = int(self.text_processor.predict(message_text))
@@ -287,14 +288,12 @@ class GroupAgent():
             # 如果是 User
             if isinstance(chat, User):
                 teacher_from_user = self.process_user(chat, context_city)
-                logger.info(f"teacher_from_user {teacher_from_user} for {username}")
             # 如果是 Group
             elif chat.megagroup == True:
                 self.process_group(chat)
             # 如果是 Channel
             else:
                 teacher_from_channel = self.process_channel(chat, context_city)
-                logger.info(f"teacher_from_channel {teacher_from_channel} for {username}")
             
             # 把 report 存到数据库中
             if message_type == 1 or message_type == 2:

@@ -7,17 +7,13 @@ from telethon.errors import SessionPasswordNeededError
 from agents.group_agent import GroupAgent
 
 logger.add(
-    "group_members.log",
+    "logs/crawler_group_members.log",
     level="INFO",
-    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{message}",
+    format="{time:YYYY-MM-DD HH:mm:ss}\t{level}\t{name}\t{function}\t{message}",
     encoding="utf-8"
 )
 
-def main() -> None:
-    # 读取配置
-    config = ConfigParser()
-    config.read('config/crawler_config.ini')
-
+def init_client(config: ConfigParser):
     username = config.get('TG', 'username')
     phone = config.get('TG', 'phone')
     api_id = int(config.get('TG', 'api_id'))
@@ -26,7 +22,7 @@ def main() -> None:
     # 创建连接
     client = TelegramClient(username, api_id, api_hash)
     client.start()
-    logger.info(f"TelegramClient created for {username}")
+    print(f"TelegramClient created for {username}")
 
     # 确认授权
     if not client.is_user_authorized():
@@ -35,6 +31,15 @@ def main() -> None:
             client.sign_in(phone, input('Enter the code: '))
         except SessionPasswordNeededError:
             client.sign_in(password=input('Password: '))
+    return client
+
+def main() -> None:
+    # 读取配置
+    config = ConfigParser()
+    config.read('config/crawler_config.ini')
+
+    # 初始化客户端
+    client = init_client(config)
 
     # 获取群成员信息，存量，可以每周一次
     group_agent = GroupAgent(client, config)

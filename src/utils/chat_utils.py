@@ -171,9 +171,6 @@ class ChatUtils:
         for chat_name in chat_names:
             if chat_name.lower().endswith("bot"):
                 continue
-            if chat_name in processed_usernames:
-                continue
-            processed_usernames[chat_name] = 1
 
             # TODO: private chat 怎么处理？
             if chat_name.startswith("+"):

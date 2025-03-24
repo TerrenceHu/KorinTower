@@ -120,6 +120,12 @@ class GroupAgent():
         self.group_model.update_group_date(id, today_date)
 
     def process_user(self, user: User, context_city: str):
+        if user.username in processed_usernames:
+            logger.info(f"Already checked user {user.username}")
+            return None
+        processed_usernames[user.username] = 1
+        logger.info(f"Processing user {user.id},{user.username} from {context_city}")
+
         # 过滤bot、广告号、已经爬过的用户，减少TG请求
         # TODO: 可能用户信息会更新，需要重新爬取
         if user.bot:
@@ -163,7 +169,12 @@ class GroupAgent():
         return None
 
     def process_channel(self, channel: Channel, context_city: str, user_of_channel: User = None):
+        if channel.username in processed_usernames:
+            logger.info(f"Already checked channel {channel.username}")
+            return None
+        processed_usernames[channel.username] = 1
         logger.info(f"Processing channel {channel.id},{channel.username},{channel.title} from {context_city}")
+        
         # 过滤广告 channel
         if filter_entity_by_title(channel.title):
             logger.info(f"Filter ad channel {channel.id},{channel.username},{channel.title} by title")
@@ -253,16 +264,14 @@ class GroupAgent():
         logger.info(f"Message {message_text[:200]} is type {message_type}")
 
         for username in usernames:
-            if username.lower().endswith("bot"):
-                continue
             if username in processed_usernames:
                 logger.info(f"Already checked chat {username}")
                 continue
-            processed_usernames[username] = 1
+            if username.lower().endswith("bot"):
+                continue
             if username == channel.username:
                 logger.info(f"Ignore self username {username}")
                 continue
-
             # TODO: private chat 怎么处理？
             if username.startswith("+"):
                 #self.join_private_chat(chat_name)
@@ -297,11 +306,15 @@ class GroupAgent():
                     logger.info(f"Add report {channel.id},{message.id} for teacher {teacher_from_channel}")
 
     def process_group(self, group: Channel):
+        if group.username in processed_usernames:
+            logger.info(f"Already checked group {group.username}")
+            return
+        processed_usernames[group.username] = 1
+        logger.info(f"Processing group {group.id},{group.username},{group.title}")
+
         if isinstance(group, ChannelForbidden):
             logger.warning(f"Group {group.id} is forbidden")
             return
-        
-        logger.info(f"Processing group {group.id},{group.username},{group.title}")
         # 过滤成员少于1000、广告、已经加入的Group
         # TODO: 判断是否是老师群
         if group.participants_count != None and group.participants_count < 1000:

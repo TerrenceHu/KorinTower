@@ -24,7 +24,7 @@ class TeacherModel:
     def add_teacher(self, id: int, username: str,
                     name: str, city_id: int, district_id: str, price: str, price1: str,
                     age: str, height: str, weight: str, measurement: str, service: str,
-                    updated_date: date):
+                    updated_date: date, score: float):
         # 开始事务
         self.connection.start_transaction()
 
@@ -33,10 +33,10 @@ class TeacherModel:
         """
         query = '''
         INSERT INTO teachers (
-            id, username, name, city_id, district_id, price1p, updated_date
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s);
+            id, username, name, city_id, district_id, price1p, updated_date, score
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
         '''
-        values = (id, username, name, city_id, district_id, price1, updated_date)
+        values = (id, username, name, city_id, district_id, price1, updated_date, score)
         if not self._execute_query(query, values):
             logger.error(f"Error adding teacher: {id},{username}")
             self.connection.rollback()
@@ -135,15 +135,20 @@ class TeacherModel:
         if not self._execute_query(query, values):
             logger.error(f"Failed to add report {channel_id},{username},{message_id} for teacher {teacher_id}")
 
-    def get_reports_by_teacher_id(self, teacher_id: int):        
-        query = "SELECT * FROM reports WHERE teacher_id = %s;"
-        try:
-            self.cursor.execute(query, (teacher_id,))
-            return self.cursor.fetchall()
-        except Error as e:
-            logger.error(f"Failed to get reports by teacher id {teacher_id}")
+    def get_reports_by_teacher_id(self, teacher_ids: list[int]):        
+        if not teacher_ids:
+            logger.warning("No teacher IDs provided for report retrieval.")
             return []
 
+        placeholders = ', '.join(['%s'] * len(teacher_ids))
+        query = f"SELECT * FROM reports WHERE teacher_id IN ({placeholders});"
+        try:
+            self.cursor.execute(query, teacher_ids)
+            return self.cursor.fetchall()
+        except Error as e:
+            logger.error(f"Failed to get reports by teacher IDs {teacher_ids}: {e}")
+            return []
+    
     def _execute_query(self, query, values) -> bool:
         try:
             self.cursor.execute(query, values)

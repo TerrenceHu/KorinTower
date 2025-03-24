@@ -89,6 +89,7 @@ CREATE TABLE kt.teachers (
 	price1p VARCHAR(255),
 	status INT DEFAULT 0,
 	updated_date DATE,
+	score FLOAT DEFAULT 0,
 	INDEX idx_city_id (city_id),
 	INDEX idx_district_id (district_id)
 )

@@ -12,12 +12,12 @@ from telethon.errors.rpcerrorlist import InviteRequestSentError, UserAlreadyPart
 from globals import *
 from utils.chat_utils import *
 
-from agents.channel_agent import ChannelAgent
+from algorithms.text_processor import TextProcessor
 from models.group_model import GroupModel
 from models.channel_model import ChannelModel
 from models.user_model import UserModel
 from models.teacher_model import TeacherModel
-from algorithms.text_processor import TextProcessor
+from agents.channel_agent import ChannelAgent
 
 today_date = date.today()
 
@@ -182,7 +182,7 @@ class GroupAgent():
         logger.info(f"Add new channel {channel.id},{channel.username},{channel.title}")
 
         # 抓取 channel 消息
-        pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages(channel, limit=100)
+        pinned_messages, candidate_messages = self.channel_agent.fetch_channel_messages_two_headed(channel, limit=100)
         if pinned_messages == None and candidate_messages == None:
             logger.error(f"Empty messages of channel {channel.id}")
             return None

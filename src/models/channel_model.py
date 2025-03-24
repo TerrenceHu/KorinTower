@@ -85,7 +85,7 @@ class ChannelModel:
     def get_channel_messages(self, channel_id: int):
         """
         获取渠道的消息
-        """        
+        """
         select_query = "SELECT * FROM channel_messages WHERE channel_id = %s;"
         try:
             self.cursor.execute(select_query, (channel_id,))

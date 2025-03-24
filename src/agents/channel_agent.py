@@ -15,12 +15,14 @@ from models.user_model import UserModel
 from models.channel_model import ChannelModel
 from models.teacher_model import TeacherModel
 from models.district_model import DistrictModel
+from agents.teacher_agent import TeacherAgent
 
 today_date = date.today()
 
 class ChannelAgent():
     def __init__(self, client: TelegramClient, config: ConfigParser) -> None:
         self.client = client
+        self.teacher_agent = TeacherAgent(config)
 
         self.db_host = config.get('DATABASE', 'db_host')
         self.db_user = config.get('DATABASE', 'db_user')
@@ -64,21 +66,20 @@ class ChannelAgent():
     def _deduplicate_messages(self, messages: list[Message]):
         seen = set()
         unique_messages = []
-        for msg in messages:
-            if msg.id not in seen:
-                seen.add(msg.id)
-                unique_messages.append(msg)
+        for message in messages:
+            if message.id not in seen:
+                seen.add(message.id)
+                unique_messages.append(message)
         return unique_messages
 
-    def fetch_channel_messages(self, channel: Channel, limit: int):
+    def fetch_channel_messages_two_headed(self, channel: Channel, limit: int):
         # 获取最早的 100 条消息
         earliest_messages = self._fetch_messages(channel, limit, reverse=True)
         # 获取最晚的 100 条消息
         latest_messages = self._fetch_messages(channel, limit, reverse=False)
-
         # 合并消息列表并去重
         unique_messages = self._deduplicate_messages(earliest_messages + latest_messages)
-
+        
         pinned_messages, class_messages, candidate_messages = [], [], []
         for message in unique_messages:
             if not message.message and not message.pinned:
@@ -281,14 +282,12 @@ class ChannelAgent():
         district_id = self.district_model.get_district_id_by_name(district, city_id)
         logger.info(f"{teacher_info},{city_id},{district_id}")
 
-        channel_ids = self.user_model.get_channels_of_user(user.id)
-        logger.info(f"---------{channel_ids}")
-
+        score = self.teacher_agent.calc_score_of_teacher(user.id)
         
         self.teacher_model.add_teacher(user.id, user.username,
                                        name, city_id, district_id, price, price1,
                                        age, height, weight, measurement, service,
-                                       today_date)
+                                       today_date, score)
 
     def parse_photo_text(self, media_url, channel_id, message_id):
         file_name = os.path.join(self.media_path, f"{channel_id}_{message_id}.jpg")

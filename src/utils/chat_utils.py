@@ -1,4 +1,5 @@
 import os, re
+from math import exp
 from configparser import ConfigParser
 from loguru import logger
 from collections import Counter
@@ -12,6 +13,8 @@ from telethon.tl.functions.channels import GetFullChannelRequest
 from globals import *
 from models.district_model import DistrictModel
 
+def norm(x: float):
+    return (1 - exp(-x)) / (1 + exp(-x))
 
 def replace_whitespace(input_text):
     if input_text:

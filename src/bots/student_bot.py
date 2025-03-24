@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from agents.teacher_agent import TeacherAgent
+from models.teacher_model import TeacherModel
 from models.district_model import DistrictModel
 from utils.bot_utils import *
 
@@ -20,6 +21,8 @@ class StudentBot:
         self.db_user = config.get('DATABASE', 'db_user')
         self.db_password = config.get('DATABASE', 'db_password')
         self.db_database = config.get('DATABASE', 'db_database')
+        self.teacher_model = TeacherModel(host=self.db_host, user=self.db_user,
+                                          password=self.db_password, database=self.db_database)
         self.district_model = DistrictModel(host=self.db_host, user=self.db_user,
                                           password=self.db_password, database=self.db_database)
         self.teacher_agent = TeacherAgent(config)
@@ -88,8 +91,7 @@ class StudentBot:
             return
 
         teachers = self.teacher_agent.get_teachers_by_city(city_id)
-        reports_of_teachers = self.teacher_agent.get_reports_of_teachers(teachers)
-        logger.info(f"{len(teachers)} effective teachers in {city_id},{city_name}")
+        logger.info(f"Got {len(teachers)} effective teachers in {city_id},{city_name}")
 
         # 一个城市的 teacher 太多，分区域检索
         if len(teachers) > 100:
@@ -99,8 +101,11 @@ class StudentBot:
             response = f"「{city_name}」老师太多啦，请选择具体区域："
             await query.message.reply_html(response, reply_markup=reply_markup)
         else:
+            teacher_ids = [teacher[0] for teacher in teachers]
+            reports_of_teachers = self.teacher_agent.get_reports_by_teacher_id(teacher_ids)
             total_pages = (len(teachers) - 1) // self.page_size + 1
             total_pages = max(total_pages, 1)
+
             # 保存关键数据到上下文
             context.user_data.update({
                 "current_city": city_name,
@@ -125,8 +130,9 @@ class StudentBot:
             return
     
         teachers = self.teacher_agent.get_teachers_by_district(district_id)
-        reports_of_teachers = self.teacher_agent.get_reports_of_teachers(teachers)
         logger.info(f"{len(teachers)} effective teachers in {district_id},{district_name}")
+        teacher_ids = [teacher[0] for teacher in teachers]
+        reports_of_teachers = self.teacher_agent.get_reports_by_teacher_id(teacher_ids)
 
         total_pages = (len(teachers) - 1) // self.page_size + 1
         total_pages = max(total_pages, 1)

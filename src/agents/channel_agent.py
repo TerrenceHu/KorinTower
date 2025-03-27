@@ -165,7 +165,7 @@ class ChannelAgent():
                 result_format='message',
                 temperature=0.1
                 )
-            logger.info(f"{content}\t{response}")
+            logger.info(f"LLM {content}\t{response}")
         except Exception as e:
             logger.error(f"LLM parse type error for {content}: {e}")
             return -1
@@ -282,7 +282,7 @@ class ChannelAgent():
         district_id = self.district_model.get_district_id_by_name(district, city_id)
         logger.info(f"{teacher_info},{city_id},{district_id}")
 
-        score = self.teacher_agent.calc_score_of_teacher(user.id)
+        score = self.teacher_agent.rank(user.id)
         
         self.teacher_model.add_teacher(user.id, user.username,
                                        name, city_id, district_id, price, price1,

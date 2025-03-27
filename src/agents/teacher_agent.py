@@ -47,7 +47,7 @@ class TeacherAgent():
         return reports_dict
 
 
-    def calc_score_of_teacher(self, teacher_id):
+    def rank(self, teacher_id):
         count, comments, replies, reactions, views = 0, 0, 0, 0, 0
         latest_date = None
 
@@ -83,3 +83,6 @@ class TeacherAgent():
                 + 1.0 * (1 - min(date_diff / 8, 1) ** 2)
         
         return score
+
+    def recall(self):
+        return
